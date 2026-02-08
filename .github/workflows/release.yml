@@ -213,7 +213,17 @@ jobs:
         run: |
           mkdir -p dist/native-${{ matrix.name }}
           cp bs_calendar_core.h dist/native-${{ matrix.name }}/
-          find engine/target/${{ matrix.target }}/release -name "libbs_calendar_core.*" -o -name "bs_calendar_core.dll" | xargs -I {} cp {} dist/native-${{ matrix.name }}/
+          
+          # Use cp -L to follow symlinks and ensure we get the actual binaries
+          find engine/target/${{ matrix.target }}/release -maxdepth 1 \( -name "libbs_calendar_core.dylib" -o -name "libbs_calendar_core.so" -o -name "libbs_calendar_core.a" -o -name "bs_calendar_core.dll" \) -exec cp -L {} dist/native-${{ matrix.name }}/ \;
+          
+          # Strip symbols to reduce size on macOS
+          if [[ "${{ matrix.target }}" == *"apple-darwin"* ]]; then
+            # Check if dylib exists before stripping
+            if [ -f "dist/native-${{ matrix.name }}/libbs_calendar_core.dylib" ]; then
+              strip -x dist/native-${{ matrix.name }}/libbs_calendar_core.dylib
+            fi
+          fi
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -245,9 +255,13 @@ jobs:
         run: |
           mkdir -p dist/native-macos-universal
           
-          # Copy header file (same for both architectures)
+          # Copy header file
           cp artifacts/macos-x86_64/bs_calendar_core.h dist/native-macos-universal/
           
+          # Check if dylibs exist and are not empty
+          ls -lh artifacts/macos-x86_64/libbs_calendar_core.dylib
+          ls -lh artifacts/macos-aarch64/libbs_calendar_core.dylib
+
           # Create universal binary using lipo
           lipo -create \
             artifacts/macos-x86_64/libbs_calendar_core.dylib \
@@ -258,6 +272,7 @@ jobs:
           echo "Universal binary info:"
           lipo -info dist/native-macos-universal/libbs_calendar_core.dylib
           file dist/native-macos-universal/libbs_calendar_core.dylib
+          ls -lh dist/native-macos-universal/libbs_calendar_core.dylib
 
       - name: Upload universal binary
         uses: actions/upload-artifact@v4
