@@ -321,10 +321,7 @@ jobs:
       - name: Install cargo-binstall
         run: curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
 
-      - name: Install git-cliff
-        run: |
-          cargo binstall --no-confirm git-cliff
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -346,14 +343,12 @@ jobs:
           cd ..
 
       - name: Generate changelog
-        run: |
-          VERSION="${{ needs.validate-and-version.outputs.version }}"
-          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-          if [ -z "$LAST_TAG" ]; then
-            git-cliff --tag "v${VERSION}" --unreleased --strip all > CHANGELOG_RELEASE.md
-          else
-            git-cliff --tag "v${VERSION}" ${LAST_TAG}..HEAD --strip all > CHANGELOG_RELEASE.md
-          fi
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: cliff.toml
+          args: --tag v${{ needs.validate-and-version.outputs.version }} --unreleased --strip all
+        env:
+          OUTPUT: CHANGELOG_RELEASE.md
 
       - name: Update Cargo.toml version
         run: |
