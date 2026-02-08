@@ -1,6 +1,6 @@
 [package]
 name = "bs_calendar_core"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["Your Name <your.email@example.com>"]
 description = "Platform-agnostic Bikram Sambat calendar engine with tithi support"
