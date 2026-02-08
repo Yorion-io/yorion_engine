@@ -19,7 +19,15 @@ impl AstronomicalService {
             override_provider: None,
         }
     }
+}
 
+impl Default for AstronomicalService {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl AstronomicalService {
     pub fn with_overrides(provider: Box<dyn TithiOverrideProvider>) -> Self {
         AstronomicalService {
             override_provider: Some(provider),
@@ -228,12 +236,12 @@ impl AstronomicalService {
                 diff -= 360.0;
             }
 
-            if diff < 0.001 || diff > 359.999 {
+            if !(0.001..=359.999).contains(&diff) {
                 return Ok(jd);
             }
 
             let days_to_go = (360.0 - diff) / 12.19;
-            jd += days_to_go.max(0.0001).min(1.0);
+            jd += days_to_go.clamp(0.0001, 1.0);
 
             iterations += 1;
             if iterations > 2000 {
@@ -257,13 +265,13 @@ impl AstronomicalService {
                 diff -= 360.0;
             }
 
-            if diff < 0.001 || diff > 359.999 {
+            if !(0.001..=359.999).contains(&diff) {
                 return Ok(jd);
             }
 
             // Go backwards (moon moves ~12.19 deg/day relative to sun)
             let days_back = diff / 12.19;
-            jd -= days_back.max(0.0001).min(1.0);
+            jd -= days_back.clamp(0.0001, 1.0);
 
             iterations += 1;
             if iterations > 2000 {

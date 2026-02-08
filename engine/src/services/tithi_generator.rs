@@ -29,6 +29,7 @@ impl TithiInstanceGenerator {
     }
 
     /// Generate tithi-based instances within a date range
+    #[allow(clippy::too_many_arguments)]
     pub fn generate_instances(
         &self,
         event_id: &str,
@@ -119,7 +120,7 @@ impl TithiInstanceGenerator {
             // Refresh cache if needed (if first run or if we've passed the next Amavasya)
             if cached_lunar_data
                 .as_ref()
-                .map_or(true, |(ama_jd, _, _)| jd > *ama_jd)
+                .is_none_or(|(ama_jd, _, _)| jd > *ama_jd)
             {
                 let next_amavasya_jd = self.astronomical_service.find_next_amavasya(jd)?;
                 let amavasya_dt = self.jd_to_utc(next_amavasya_jd);

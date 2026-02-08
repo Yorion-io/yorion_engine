@@ -137,7 +137,7 @@ impl BsDate {
         let month = BsMonth::from_u8(month)?;
 
         // Basic day validation (1-32)
-        if day < 1 || day > 32 {
+        if !(1..=32).contains(&day) {
             return Err(BsCalendarError::InvalidDay(day, month.to_u8()));
         }
 
@@ -146,7 +146,7 @@ impl BsDate {
 
     /// Create from BsMonth enum
     pub fn from_parts(year: u16, month: BsMonth, day: u8) -> Result<Self> {
-        if day < 1 || day > 32 {
+        if !(1..=32).contains(&day) {
             return Err(BsCalendarError::InvalidDay(day, month.to_u8()));
         }
 

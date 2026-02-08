@@ -83,16 +83,22 @@ fn main() {
     // Generate the provider implementation
     rust_code.push_str("/// Static calendar data provider (zero-cost at runtime)\n");
     rust_code.push_str("#[derive(Debug, Clone, Copy)]\n");
-    rust_code.push_str("pub struct StaticCalendarProvider;\n\n");
+    rust_code.push_str("pub struct StaticCalendarProvider {}\n\n");
     rust_code.push_str("impl StaticCalendarProvider {\n");
     rust_code.push_str("    pub const fn new() -> Self {\n");
-    rust_code.push_str("        StaticCalendarProvider\n");
+    rust_code.push_str("        StaticCalendarProvider {}\n");
     rust_code.push_str("    }\n\n");
     rust_code.push_str("    fn get_year_data(&self, year: u16) -> Result<&'static YearData> {\n");
     rust_code.push_str("        CALENDAR_DATA\n");
     rust_code.push_str("            .iter()\n");
     rust_code.push_str("            .find(|y| y.year == year)\n");
     rust_code.push_str("            .ok_or(BsCalendarError::CalendarDataNotFound(year))\n");
+    rust_code.push_str("    }\n");
+    rust_code.push_str("}\n\n");
+
+    rust_code.push_str("impl Default for StaticCalendarProvider {\n");
+    rust_code.push_str("    fn default() -> Self {\n");
+    rust_code.push_str("        Self::new()\n");
     rust_code.push_str("    }\n");
     rust_code.push_str("}\n\n");
 
@@ -186,8 +192,8 @@ fn main() {
         override_entries.len()
     ));
     for entry in &override_entries {
-        overrides_code.push_str(&entry);
-        overrides_code.push_str("\n");
+        overrides_code.push_str(entry);
+        overrides_code.push('\n');
     }
     overrides_code.push_str("];\n");
 

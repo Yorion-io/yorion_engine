@@ -104,7 +104,7 @@ impl BsRecurrenceRule {
         // Validate by_month_day values
         if let Some(ref days) = self.by_month_day {
             for &day in days {
-                if day < 1 || day > 32 {
+                if !(1..=32).contains(&day) {
                     return Err(BsCalendarError::InvalidRecurrenceRule(format!(
                         "Invalid day of month: {}",
                         day

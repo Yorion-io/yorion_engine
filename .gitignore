@@ -1,0 +1,8 @@
+# Secrets file for act (DO NOT COMMIT)
+.secrets
+.actrc
+
+# Act artifacts
+.act/
+dist/
+dist

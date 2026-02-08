@@ -50,6 +50,8 @@ pub mod wasm;
 
 #[cfg(feature = "flutter")]
 pub mod api;
+#[cfg(feature = "flutter")]
+mod frb_generated;
 
 /// Prelude module for convenient imports
 pub mod prelude {

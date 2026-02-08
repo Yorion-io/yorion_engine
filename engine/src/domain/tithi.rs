@@ -244,7 +244,7 @@ impl Tithi {
 
     /// Create tithi from paksha and day number
     pub fn from_paksha_day(paksha: Paksha, day: u8) -> Result<Self> {
-        if day < 1 || day > 15 {
+        if !(1..=15).contains(&day) {
             return Err(BsCalendarError::AstronomicalError(format!(
                 "Invalid tithi day: {} (must be 1-15)",
                 day

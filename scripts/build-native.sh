@@ -88,7 +88,7 @@ cp target/x86_64-pc-windows-gnu/release/bs_calendar_core.lib "../$DIST_DIR/windo
 echo -e "${YELLOW}⚠️  Windows static lib not found${NC}"
 
 # Copy header to each platform directory
-for dir in "$DIST_DIR"/*/; do
+for dir in "../$DIST_DIR"/*/; do
     cp "../$DIST_DIR/bs_calendar_core.h" "$dir"
 done
 

@@ -168,10 +168,7 @@ impl RRuleParser {
 
     /// Parse comma-separated list of Tithis
     fn parse_tithis(tithis_str: &str) -> Result<Vec<Tithi>> {
-        tithis_str
-            .split(',')
-            .map(|s| Self::parse_tithi(s))
-            .collect()
+        tithis_str.split(',').map(Self::parse_tithi).collect()
     }
 
     /// Parse Paksha from string

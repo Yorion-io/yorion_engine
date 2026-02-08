@@ -96,8 +96,6 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
           - os: macos-latest
             target: x86_64-apple-darwin
           - os: macos-latest
@@ -129,10 +127,53 @@ jobs:
             engine/target/${{ matrix.target }}/release/libbs_calendar_core.*
             bs_calendar_core.h
 
+  build-universal-macos:
+    name: Build Universal macOS Binary
+    runs-on: macos-latest
+    needs: [test, build-native]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download macOS x86_64 artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: native-x86_64-apple-darwin-dev
+          path: artifacts/macos-x86_64/
+
+      - name: Download macOS aarch64 artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: native-aarch64-apple-darwin-dev
+          path: artifacts/macos-aarch64/
+
+      - name: Create universal binary
+        run: |
+          mkdir -p dist/native-macos-universal
+          
+          # Copy header file (same for both architectures)
+          cp artifacts/macos-x86_64/bs_calendar_core.h dist/native-macos-universal/
+          
+          # Find and create universal binary using lipo
+          lipo -create \
+            artifacts/macos-x86_64/libbs_calendar_core.dylib \
+            artifacts/macos-aarch64/libbs_calendar_core.dylib \
+            -output dist/native-macos-universal/libbs_calendar_core.dylib
+          
+          # Verify the universal binary
+          echo "Universal binary info:"
+          lipo -info dist/native-macos-universal/libbs_calendar_core.dylib
+          file dist/native-macos-universal/libbs_calendar_core.dylib
+
+      - name: Upload universal binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-macos-universal-dev
+          path: dist/native-macos-universal/
+
   create-dev-release:
     name: Create Dev Pre-release
     runs-on: ubuntu-latest
-    needs: [build-wasm, build-native]
+    needs: [build-wasm, build-native, build-universal-macos]
     if: github.ref == 'refs/heads/dev'
     steps:
       - uses: actions/checkout@v4
@@ -179,8 +220,8 @@ jobs:
             **Build:** #${{ github.run_number }}
             
             ### Artifacts
-            - WASM bindings
-            - Native libraries (macOS, Linux)
+            - WASM bindings (for NestJS/web)
+            - Universal macOS binary (Intel + Apple Silicon)
             
             ⚠️ This is a pre-release build for testing purposes.
         env:

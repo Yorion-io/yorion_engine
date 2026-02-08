@@ -1,7 +1,10 @@
 use crate::core_api::CalendarEngine;
 use crate::domain::zodiac::DailyAstroInfo;
 use crate::domain::Language;
-use crate::prelude::*;
+use crate::domain::{
+    BsDate, BsRecurrenceRule, EventInstance, Nakshatra, Tithi, TithiRecurrenceRule, ZodiacSign,
+};
+use crate::error::{BsCalendarError, Result};
 use chrono::NaiveDate;
 use std::sync::{OnceLock, RwLock};
 
@@ -10,7 +13,7 @@ static ENGINE: OnceLock<CalendarEngine> = OnceLock::new();
 static LANGUAGE: OnceLock<RwLock<Language>> = OnceLock::new();
 
 fn get_engine() -> &'static CalendarEngine {
-    ENGINE.get_or_init(|| CalendarEngine::new())
+    ENGINE.get_or_init(CalendarEngine::new)
 }
 
 fn get_language_lock() -> &'static RwLock<Language> {
@@ -100,7 +103,7 @@ pub fn get_nakshatra(year: i32, month: u32, day: u32) -> Result<Nakshatra> {
     let engine = get_engine();
     let gregorian = NaiveDate::from_ymd_opt(year, month, day)
         .ok_or_else(|| BsCalendarError::InvalidDate("Invalid Gregorian Date".to_string()))?;
-    engine.get_nakshatra(gregorian)
+    Ok(engine.get_nakshatra(gregorian))
 }
 
 /// Get complete daily astronomical information for a specific Gregorian date.

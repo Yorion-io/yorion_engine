@@ -4,11 +4,11 @@ use crate::ports::TimeProvider;
 use chrono::{DateTime, NaiveDate, NaiveTime, Utc};
 
 /// System time provider using chrono and sun calculations
-pub struct SystemTimeProvider;
+pub struct SystemTimeProvider {}
 
 impl SystemTimeProvider {
     pub fn new() -> Self {
-        SystemTimeProvider
+        SystemTimeProvider {}
     }
 
     /// Calculate sunrise time using accurate astronomical algorithms

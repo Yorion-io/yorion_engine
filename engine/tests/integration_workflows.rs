@@ -46,7 +46,7 @@ fn test_end_to_end_event_generation_from_json() {
     let astronomical_service =
         std::sync::Arc::new(AstronomicalService::with_overrides(override_provider));
     let conversion_service = std::sync::Arc::new(ConversionService::new(provider));
-    let time_provider = std::sync::Arc::new(bs_calendar_core::adapters::SystemTimeProvider); // Use system time for test
+    let time_provider = std::sync::Arc::new(bs_calendar_core::adapters::SystemTimeProvider {}); // Use system time for test
 
     let instance_generator = InstanceGenerator::new(conversion_service.clone());
     let tithi_instance_generator = TithiInstanceGenerator::new(

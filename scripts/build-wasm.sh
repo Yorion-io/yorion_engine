@@ -31,7 +31,7 @@ wasm-pack build \
     --out-dir "../$DIST_DIR/web" \
     --release \
     --features wasm \
-    -- --no-default-features
+    --no-default-features
 
 # Build for bundler target (webpack, rollup, etc.)
 echo -e "${BLUE}Building for bundler target...${NC}"
@@ -40,7 +40,7 @@ wasm-pack build \
     --out-dir "../$DIST_DIR/bundler" \
     --release \
     --features wasm \
-    -- --no-default-features
+    --no-default-features
 
 # Build for nodejs target
 echo -e "${BLUE}Building for nodejs target...${NC}"
@@ -49,7 +49,7 @@ wasm-pack build \
     --out-dir "../$DIST_DIR/nodejs" \
     --release \
     --features wasm \
-    -- --no-default-features
+    --no-default-features
 
 # Create package info
 cat > "../$DIST_DIR/README.md" << 'EOF'

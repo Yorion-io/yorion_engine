@@ -7,12 +7,18 @@ include!(concat!(env!("OUT_DIR"), "/tithi_overrides_data.rs"));
 
 /// Static Tithi override provider (zero-cost at runtime)
 #[derive(Debug, Clone, Copy)]
-pub struct StaticTithiOverrideProvider;
+pub struct StaticTithiOverrideProvider {}
 
 impl StaticTithiOverrideProvider {
     /// Create a new instance
     pub const fn new() -> Self {
-        StaticTithiOverrideProvider
+        StaticTithiOverrideProvider {}
+    }
+}
+
+impl Default for StaticTithiOverrideProvider {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

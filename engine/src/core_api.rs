@@ -165,6 +165,7 @@ impl CalendarEngine {
     ///
     /// # Errors
     /// Returns error if instance generation fails.
+    #[allow(clippy::too_many_arguments)]
     pub fn generate_tithi_instances(
         &self,
         event_id: &str,
