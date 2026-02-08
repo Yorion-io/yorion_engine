@@ -13,15 +13,6 @@ cargo build --release \
     --no-default-features \
     --manifest-path engine/Cargo.toml
 
-echo "🔧 Generating Swift bindings..."
-# Generate Bindings (using the same cargo run invocation which is convenient here)
-# We use x86 or arm64 runner, but 'cargo run' will compile for HOST architecture to run the tool.
-# This might double-compile if host != target, but usually on macos-latest (arm64/x86) it's fine.
-cargo run --release --manifest-path engine/Cargo.toml \
-    --features uniffi-bindings \
-    --bin uniffi-bindgen \
-    -- generate engine/src/uniffi.udl --language swift --out-dir dist/swift --no-format
-
 # Artifacts:
 # - engine/target/aarch64-apple-darwin/release/libbs_calendar_core.a
 # - dist/swift/bs_calendar_core.swift
