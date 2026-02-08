@@ -17,6 +17,9 @@ pub enum BsCalendarError {
     #[error("Date conversion failed: {0}")]
     ConversionError(String),
 
+    #[error("Invalid date: {0}")]
+    InvalidDate(String),
+
     #[error("Invalid recurrence rule: {0}")]
     InvalidRecurrenceRule(String),
 

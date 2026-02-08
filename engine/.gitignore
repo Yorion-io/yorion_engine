@@ -1,0 +1,33 @@
+# Rust build artifacts
+/target
+
+# Distribution and build outputs
+/dist
+/pkg
+*.wasm
+*.so
+*.dylib
+*.dll
+*.a
+*.lib
+*.h
+
+# Cocogitto history
+.cog_history
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Flutter build artifacts
+/flutter/build/
+
+# WASM build artifacts
+/wasm/pkg/
+/wasm/node_modules/
+

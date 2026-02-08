@@ -1,0 +1,48 @@
+# Cocogitto Configuration
+# Conventional commits and semantic versioning automation
+
+# Branch whitelist - only these branches can be tagged
+branch_whitelist = ["main", "dev"]
+
+# Ignore merge commits when generating changelog
+ignore_merge_commits = true
+
+# Pre-bump hooks - run before version bump
+[pre_bump_hooks]
+# Ensure working directory is clean
+"git diff --quiet" = { error_message = "Working directory is not clean" }
+
+# Post-bump hooks - run after version bump but before tag
+[post_bump_hooks]
+# Update Cargo.toml version
+"cargo build --release" = { error_message = "Build failed" }
+
+# Commit types configuration
+[commit_types]
+feat = { changelog_title = "Features", bump = "minor" }
+fix = { changelog_title = "Bug Fixes", bump = "patch" }
+docs = { changelog_title = "Documentation", bump = "patch" }
+style = { changelog_title = "Styling", bump = "patch" }
+refactor = { changelog_title = "Refactoring", bump = "patch" }
+perf = { changelog_title = "Performance", bump = "patch" }
+test = { changelog_title = "Tests", bump = "patch" }
+build = { changelog_title = "Build System", bump = "patch" }
+ci = { changelog_title = "CI/CD", bump = "patch" }
+chore = { changelog_title = "Miscellaneous", bump = "patch" }
+revert = { changelog_title = "Reverts", bump = "patch" }
+
+# Breaking changes always bump major version
+[bump_profiles.default]
+pre_bump_hooks = []
+post_bump_hooks = []
+
+# Changelog configuration
+[changelog]
+path = "CHANGELOG.md"
+template = "remote"
+remote = "github.com"
+repository = "bs_calendar_core"
+owner = "gummy"
+
+# Tag prefix
+tag_prefix = "v"
