@@ -1,0 +1,53 @@
+[package]
+name = "bs_calendar_core"
+version = "0.1.0"
+edition = "2021"
+authors = ["Your Name <your.email@example.com>"]
+description = "Platform-agnostic Bikram Sambat calendar engine with tithi support"
+license = "MIT OR Apache-2.0"
+
+[lib]
+name = "bs_calendar_core"
+path = "src/lib.rs"
+crate-type = ["rlib", "cdylib"]
+
+[dependencies]
+chrono = { version = "0.4", default-features = false, features = ["serde", "wasmbind", "clock"] }
+serde = { version = "1.0", default-features = false, features = ["derive", "alloc"] }
+thiserror = "2.0"
+suncalc = "0.3.0"
+astro = "2.0.0"
+serde_json = "1.0"
+
+# WASM dependencies
+wasm-bindgen = { version = "0.2", optional = true }
+serde-wasm-bindgen = { version = "0.6", optional = true }
+js-sys = { version = "0.3", optional = true }
+getrandom = { version = "0.2", features = ["js"], optional = true }
+
+# Flutter dependencies
+flutter_rust_bridge = { version = "2.0", optional = true }
+rrule = "0.14.0"
+
+
+[features]
+default = []
+wasm = ["wasm-bindgen", "serde-wasm-bindgen", "js-sys", "getrandom/js"]
+flutter = ["flutter_rust_bridge"]
+
+[dev-dependencies]
+proptest = "1.0"
+
+[build-dependencies]
+serde_json = "1.0"
+chrono = "0.4"
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

@@ -1,0 +1,10 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 58d8ddffa07179cbdd59d914a46db010e39cca0be3cf71fef5eed68b16c8430b # shrinks to year = 2003, month = 9, day = 30
+cc 55bd74a674fe8cf6009f7a04be0f0358104c24111c738ba774a49094256af542 # shrinks to year = 2000, month = 3, day = 32
+cc 343d2dbefc6147855f8fc95e545eeb64cef7baab610d1f621b0c68ea86ef715f # shrinks to year = 2000, month = 6, day = 31
+cc da89cbbd09c68a715e46328b0cf0f3738ab6c98769a009e619f235f152ba186d # shrinks to year = 2000, month = 6, day = 31
