@@ -46,7 +46,7 @@ cbindgen = "0.27"
 
 
 [package.metadata.wasm-pack.profile.release]
-wasm-opt = true
+wasm-opt = false
 
 [profile.release]
 opt-level = "z"

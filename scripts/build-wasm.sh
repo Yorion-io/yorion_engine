@@ -3,6 +3,7 @@ set -euo pipefail
 
 # Build WASM binaries for web, bundler, and nodejs targets
 # Outputs to dist/wasm/
+export RUSTFLAGS="-C target-feature=+bulk-memory,+nontrapping-fptoint"
 
 echo "🦀 Building WASM binaries..."
 
@@ -24,6 +25,26 @@ if ! command -v wasm-pack &> /dev/null; then
     cargo install wasm-pack
 fi
 
+# Check for wasm-opt (part of binaryen)
+if ! command -v wasm-opt &> /dev/null; then
+    # Try to find wasm-opt in wasm-pack cache recursively
+    WASM_OPT_CACHE=$(find "$HOME/Library/Caches/.wasm-pack" -name wasm-opt -type f 2>/dev/null | head -n 1 || true)
+    if [ -n "$WASM_OPT_CACHE" ]; then
+        echo "🔍 Found wasm-opt in cache: $WASM_OPT_CACHE"
+        # Create a temporary alias or just use the full path
+        alias wasm-opt="$WASM_OPT_CACHE"
+        # Note: aliases don't work in scripts without shopt -s expand_aliases, 
+        # so let's use a variable instead
+        WASM_OPT_BIN="$WASM_OPT_CACHE"
+    else
+        echo "⚠️ wasm-opt not found in PATH or cache, binaries will not be optimized"
+        echo "💡 Tip: Install binaryen (brew install binaryen) for better performance"
+        WASM_OPT_BIN=""
+    fi
+else
+    WASM_OPT_BIN="wasm-opt"
+fi
+
 # Build for web target
 echo -e "${BLUE}Building for web target...${NC}"
 wasm-pack build \
@@ -32,6 +53,11 @@ wasm-pack build \
     --release \
     --features wasm \
     --no-default-features
+
+if [ -n "$WASM_OPT_BIN" ]; then
+    echo "⚡ Optimizing web WASM..."
+    "$WASM_OPT_BIN" -Oz --enable-bulk-memory --enable-nontrapping-float-to-int "../$DIST_DIR/web/bs_calendar_core_bg.wasm" -o "../$DIST_DIR/web/bs_calendar_core_bg.wasm"
+fi
 
 # Build for bundler target (webpack, rollup, etc.)
 echo -e "${BLUE}Building for bundler target...${NC}"
@@ -42,6 +68,11 @@ wasm-pack build \
     --features wasm \
     --no-default-features
 
+if [ -n "$WASM_OPT_BIN" ]; then
+    echo "⚡ Optimizing bundler WASM..."
+    "$WASM_OPT_BIN" -Oz --enable-bulk-memory --enable-nontrapping-float-to-int "../$DIST_DIR/bundler/bs_calendar_core_bg.wasm" -o "../$DIST_DIR/bundler/bs_calendar_core_bg.wasm"
+fi
+
 # Build for nodejs target
 echo -e "${BLUE}Building for nodejs target...${NC}"
 wasm-pack build \
@@ -50,6 +81,11 @@ wasm-pack build \
     --release \
     --features wasm \
     --no-default-features
+
+if [ -n "$WASM_OPT_BIN" ]; then
+    echo "⚡ Optimizing nodejs WASM..."
+    "$WASM_OPT_BIN" -Oz --enable-bulk-memory --enable-nontrapping-float-to-int "../$DIST_DIR/nodejs/bs_calendar_core_bg.wasm" -o "../$DIST_DIR/nodejs/bs_calendar_core_bg.wasm"
+fi
 
 # Create package info
 cat > "../$DIST_DIR/README.md" << 'EOF'
