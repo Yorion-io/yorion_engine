@@ -1,13 +1,14 @@
 # BS Calendar Core
 
-A robust, platform-agnostic Rust library for the Bikram Sambat (BS) calendar system. This library handles date conversions, tithi (lunar day) calculations, and complex recurrence rules. It is designed with a clean architecture (Ports and Adapters) to be easily embeddable in web, mobile, and desktop applications.
+A robust, platform-agnostic Rust library for the Bikram Sambat (BS) calendar system. This library handles date conversions, tithi (lunar day) calculations, and complex recurrence rules. Designed with clean architecture (Ports and Adapters) and compiled to WebAssembly for web applications.
 
 ## 🚀 Key Features
 
 *   **Accurate Conversions**: Convert between Bikram Sambat (BS) and Gregorian (AD) dates with high precision using historical anchor points.
 *   **Tithi Support**: Calculate Tithis (lunar days), Pakshas (lunar fortnights), and handle lunar events.
 *   **Recurrence Rules**: Powerful recurrence engine (similar to iCal RRULE) for both solar (BS dates) and lunar (Tithi-based) events.
-*   **Platform Agnostic**: Core logic is pure Rust, independent of platform-specific APIs.
+*   **WASM Ready**: Compiled to WebAssembly for use in browsers, bundlers, and Node.js.
+*   **TypeScript Support**: Full TypeScript definitions included.
 *   **Extensible Architecture**: Uses Ports and Adapters to allow swapping data sources and time providers.
 
 ## 🏗️ Architecture Overview
@@ -32,15 +33,17 @@ Concrete implementations of the ports.
 ### 4. Services (`src/services`)
 High-level business logic that coordinates usage of the domain and ports.
 *   **`ConversionService`**: Handles `BS ↔ Gregorian` conversions.
-*   **`AstronomicalService`**: high-precision astronomical calculations for specific Tithi timings.
+*   **`AstronomicalService`**: High-precision astronomical calculations for specific Tithi timings.
 *   **`InstanceGenerator`**: Expands recurrence rules into actual event occurrences.
 
 ## 🛠️ Usage
 
 ### Prerequisites
 *   [Rust installed](https://www.rust-lang.org/tools/install) (latest stable version).
+*   For WASM builds: `wasm-pack`
 
 ### Basic Date Conversion
+
 To convert dates, you use the `ConversionService`.
 
 ```rust
@@ -61,6 +64,16 @@ fn main() -> Result<()> {
 
     Ok(())
 }
+```
+
+### Building WASM
+
+```bash
+# Build for all WASM targets (web, bundler, nodejs)
+cd ..
+./scripts/build-wasm.sh
+
+# Output will be in dist/wasm/
 ```
 
 ## 📚 Examples
@@ -107,6 +120,17 @@ cargo run --example generate_calendar_multi
 │   ├── domain/         # Core types (BsDate, Tithi, etc.)
 │   ├── services/       # Business logic (Conversion, etc.)
 │   ├── ports/          # Traits (CalendarProvider, etc.)
-│   └── adapters/       # Implementations (StaticProvider, etc.)
+│   ├── adapters/       # Implementations (StaticProvider, etc.)
+│   └── wasm.rs         # WASM bindings
 └── data/               # Raw calendar data (JSON/CSV)
+```
+
+## 🧪 Testing
+
+```bash
+# Run all tests
+cargo test --all-features
+
+# Run specific test
+cargo test test_bs_to_gregorian
 ```

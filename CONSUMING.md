@@ -1,10 +1,12 @@
 # Consuming BS Calendar Core
 
-This guide shows how to integrate BS Calendar Core binaries into your projects.
+This guide shows how to integrate BS Calendar Core WASM bindings into your projects.
 
 ## 📦 WASM Integration
 
 ### Web (ES Modules)
+
+For direct browser usage with ES modules:
 
 ```html
 <!DOCTYPE html>
@@ -15,8 +17,13 @@ This guide shows how to integrate BS Calendar Core binaries into your projects.
         
         async function main() {
             await init();
-            // Use the library
-            console.log('BS Calendar loaded!');
+            
+            // Convert BS to Gregorian
+            const engine = bsCalendar.CalendarEngine.new();
+            const bsDate = bsCalendar.BsDate.new(2080, 1, 1);
+            const gregorian = engine.bs_to_gregorian(bsDate);
+            
+            console.log('BS 2080/1/1 =', gregorian.toString());
         }
         
         main();
@@ -30,20 +37,62 @@ This guide shows how to integrate BS Calendar Core binaries into your projects.
 
 ### Vite / Modern Bundlers
 
+For use with Vite, Webpack, Rollup, or other bundlers:
+
 ```javascript
 // Install from local path or download from releases
 import init, * as bsCalendar from './wasm/bundler/bs_calendar_core.js';
 
-await init();
-// Use the library
+async function setupCalendar() {
+    await init();
+    
+    const engine = bsCalendar.CalendarEngine.new();
+    
+    // Convert Gregorian to BS
+    const gregorian = new Date(2023, 3, 14); // April 14, 2023
+    const bsDate = engine.gregorian_to_bs(
+        gregorian.getFullYear(),
+        gregorian.getMonth() + 1,
+        gregorian.getDate()
+    );
+    
+    console.log('Gregorian to BS:', bsDate);
+}
+
+setupCalendar();
 ```
 
-### Node.js
+### Node.js / NestJS
+
+For server-side Node.js applications:
 
 ```javascript
 const bsCalendar = require('./wasm/nodejs/bs_calendar_core.js');
 
 // Use the library
+const engine = bsCalendar.CalendarEngine.new();
+
+// Get tithi for a date
+const tithi = engine.get_tithi(2023, 4, 14);
+console.log('Tithi:', tithi);
+```
+
+### TypeScript Support
+
+All WASM targets include TypeScript definitions:
+
+```typescript
+import init, { CalendarEngine, BsDate } from './wasm/bundler/bs_calendar_core';
+
+async function main() {
+    await init();
+    
+    const engine = new CalendarEngine();
+    const bsDate = BsDate.new(2080, 1, 1);
+    const gregorian = engine.bs_to_gregorian(bsDate);
+    
+    console.log(gregorian);
+}
 ```
 
 ### Automated Download in CI/CD
@@ -56,175 +105,6 @@ const bsCalendar = require('./wasm/nodejs/bs_calendar_core.js');
     curl -L -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
       https://github.com/CalNep/engine/releases/download/v${VERSION}/bs_calendar_core-wasm-${VERSION}.tar.gz \
       | tar xz -C src/lib/
-```
-
----
-
-## 📱 Flutter Integration
-
-### Download and Setup
-
-```bash
-# Create packages directory
-mkdir -p packages
-
-# Download Flutter bindings
-VERSION="0.1.0"
-curl -L -H "Authorization: token $GITHUB_TOKEN" \
-  https://github.com/CalNep/engine/releases/download/v${VERSION}/bs_calendar_core-flutter-${VERSION}.tar.gz \
-  | tar xz -C packages/
-```
-
-### pubspec.yaml
-
-```yaml
-dependencies:
-  flutter:
-    sdk: flutter
-  bs_calendar_core:
-    path: ./packages/flutter
-```
-
-### Usage
-
-```dart
-import 'package:bs_calendar_core/bridge_generated.dart';
-
-void main() async {
-  // Use the library
-  print('BS Calendar loaded!');
-}
-```
-
-### CI/CD Integration
-
-```yaml
-# .github/workflows/flutter-build.yml
-- name: Download Flutter bindings
-  run: |
-    VERSION="0.1.0"
-    mkdir -p packages
-    curl -L -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-      https://github.com/CalNep/engine/releases/download/v${VERSION}/bs_calendar_core-flutter-${VERSION}.tar.gz \
-      | tar xz -C packages/
-    
-- name: Get dependencies
-  run: flutter pub get
-```
-
----
-
-## 🔧 Native FFI Integration
-
-### C/C++
-
-```c
-#include "bs_calendar_core.h"
-
-int main() {
-    // Use the library
-    return 0;
-}
-```
-
-Compile:
-```bash
-# macOS
-gcc main.c -L./native/macos-universal -lbs_calendar_core -o app
-
-# Linux
-gcc main.c -L./native/linux-x86_64 -lbs_calendar_core -o app
-
-# Windows
-gcc main.c -L./native/windows-x86_64 -lbs_calendar_core -o app.exe
-```
-
-### Python (ctypes)
-
-```python
-import ctypes
-import platform
-
-# Determine library path based on platform
-if platform.system() == "Darwin":
-    lib_path = "./native/macos-universal/libbs_calendar_core.dylib"
-elif platform.system() == "Linux":
-    lib_path = "./native/linux-x86_64/libbs_calendar_core.so"
-elif platform.system() == "Windows":
-    lib_path = "./native/windows-x86_64/bs_calendar_core.dll"
-
-# Load library
-lib = ctypes.CDLL(lib_path)
-
-# Use the library
-```
-
-### Python Download Script
-
-```python
-# download_bindings.py
-import os
-import platform
-import tarfile
-import urllib.request
-
-VERSION = "0.1.0"
-GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN")
-
-# Determine platform
-system = platform.system().lower()
-machine = platform.machine().lower()
-
-if system == "darwin":
-    platform_name = "macos-universal"
-elif system == "linux":
-    platform_name = f"linux-{machine}"
-elif system == "windows":
-    platform_name = "windows-x86_64"
-
-# Download URL
-url = f"https://github.com/CalNep/engine/releases/download/v{VERSION}/bs_calendar_core-native-{platform_name}-{VERSION}.tar.gz"
-
-# Download with authentication
-req = urllib.request.Request(url)
-if GITHUB_TOKEN:
-    req.add_header("Authorization", f"token {GITHUB_TOKEN}")
-
-print(f"Downloading {platform_name} bindings...")
-with urllib.request.urlopen(req) as response:
-    with tarfile.open(fileobj=response, mode="r:gz") as tar:
-        tar.extractall("./lib")
-
-print("Download complete!")
-```
-
-### Go
-
-```go
-package main
-
-/*
-#cgo LDFLAGS: -L./native/macos-universal -lbs_calendar_core
-#include "bs_calendar_core.h"
-*/
-import "C"
-
-func main() {
-    // Use the library
-}
-```
-
-### Node.js (Native Addon)
-
-```javascript
-const ffi = require('ffi-napi');
-const path = require('path');
-
-const lib = ffi.Library(path.join(__dirname, 'native/macos-universal/libbs_calendar_core'), {
-    // Define functions from header
-});
-
-// Use the library
 ```
 
 ---
@@ -271,7 +151,7 @@ curl -L -H "Authorization: token $GITHUB_TOKEN" \
 
 ```bash
 VERSION="0.1.0"
-curl -L https://github.com/CalNep/engine/releases/download/v${VERSION}/...
+curl -L https://github.com/CalNep/engine/releases/download/v${VERSION}/bs_calendar_core-wasm-${VERSION}.tar.gz | tar xz
 ```
 
 ### Latest Release
@@ -281,7 +161,7 @@ curl -L https://github.com/CalNep/engine/releases/download/v${VERSION}/...
 LATEST=$(curl -s https://api.github.com/repos/CalNep/engine/releases/latest | grep '"tag_name"' | cut -d'"' -f4)
 
 # Download latest
-curl -L https://github.com/CalNep/engine/releases/download/${LATEST}/...
+curl -L https://github.com/CalNep/engine/releases/download/${LATEST}/bs_calendar_core-wasm-${LATEST#v}.tar.gz | tar xz
 ```
 
 ### Dev Builds
@@ -289,7 +169,7 @@ curl -L https://github.com/CalNep/engine/releases/download/${LATEST}/...
 ```bash
 # Use pre-release versions
 VERSION="0.1.0-dev.123"
-curl -L https://github.com/CalNep/engine/releases/download/v${VERSION}/...
+curl -L https://github.com/CalNep/engine/releases/download/v${VERSION}/bs_calendar_core-wasm-${VERSION}.tar.gz | tar xz
 ```
 
 ---
@@ -303,23 +183,13 @@ If you get 404 errors on a private repository:
 2. Verify token has `repo` scope
 3. Check token hasn't expired
 
-### Platform Detection
+### WASM Initialization
 
-For automated platform detection:
-
-```bash
-#!/bin/bash
-OS=$(uname -s | tr '[:upper:]' '[:lower:]')
-ARCH=$(uname -m)
-
-case "$OS" in
-    darwin) PLATFORM="macos-universal" ;;
-    linux) PLATFORM="linux-${ARCH}" ;;
-    mingw*|msys*) PLATFORM="windows-x86_64" ;;
-esac
-
-echo "Detected platform: $PLATFORM"
-```
+If WASM fails to load:
+1. Ensure you're calling `await init()` before using the library
+2. Check browser console for errors
+3. Verify the WASM file path is correct
+4. Ensure your server serves `.wasm` files with correct MIME type (`application/wasm`)
 
 ### Checksum Verification
 
@@ -330,3 +200,17 @@ curl -L https://github.com/CalNep/engine/releases/download/v0.1.0/SHA256SUMS -o 
 # Verify
 shasum -a 256 -c SHA256SUMS
 ```
+
+---
+
+## 📖 API Reference
+
+The WASM bindings expose the following main types:
+
+- `CalendarEngine` - Main engine for conversions and calculations
+- `BsDate` - Bikram Sambat date representation
+- `Tithi` - Lunar day enum
+- `ZodiacSign` - Zodiac sign enum
+- `Nakshatra` - Nakshatra enum
+
+See the TypeScript definitions (`.d.ts` files) in each WASM target for complete API documentation.

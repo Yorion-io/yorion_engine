@@ -141,29 +141,18 @@ jobs:
           name: wasm
           path: dist/wasm/
 
-  build-native:
-    name: Build Native - ${{ matrix.name }}
-    runs-on: ${{ matrix.os }}
+  build-macos:
+    name: Build macOS
+    runs-on: macos-latest
     needs: [validate-and-version, test]
     if: needs.validate-and-version.outputs.should_release == 'true'
-    strategy:
-      matrix:
-        include:
-          - name: macos-x86_64
-            os: macos-latest
-            target: x86_64-apple-darwin
-            use_cross: false
-          - name: macos-aarch64
-            os: macos-latest
-            target: aarch64-apple-darwin
-            use_cross: false
     steps:
       - uses: actions/checkout@v4
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.target }}
+          targets: x86_64-apple-darwin, aarch64-apple-darwin
 
       - name: Cache cargo registry
         uses: actions/cache@v4
@@ -173,117 +162,23 @@ jobs:
             ~/.cargo/git
           key: ${{ runner.os }}-cargo-deps-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Cache cargo tools
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/bin
-          key: ${{ runner.os }}-cargo-bin-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Cache target directory
-        uses: actions/cache@v4
-        with:
-          path: engine/target
-          key: ${{ runner.os }}-cargo-target-native-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Install cargo-binstall
-        run: curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
-
-      - name: Install cross
-        if: matrix.use_cross
-        run: cargo binstall --no-confirm cross
-
-      - name: Install cbindgen
-        run: cargo binstall --no-confirm cbindgen
-
-      - name: Build with cargo
-        if: ${{ !matrix.use_cross }}
-        working-directory: engine
-        run: cargo build --release --target ${{ matrix.target }}
-
-      - name: Build with cross
-        if: matrix.use_cross
-        working-directory: engine
-        run: cross build --release --target ${{ matrix.target }}
-
-      - name: Generate C header
-        working-directory: engine
-        run: cbindgen --config cbindgen.toml --output ../bs_calendar_core.h || cbindgen --output ../bs_calendar_core.h
-
-      - name: Prepare artifacts
+      - name: Build macOS artifacts
         run: |
-          mkdir -p dist/native-${{ matrix.name }}
-          cp bs_calendar_core.h dist/native-${{ matrix.name }}/
-          
-          # Use cp -L to follow symlinks and ensure we get the actual binaries
-          find engine/target/${{ matrix.target }}/release -maxdepth 1 \( -name "libbs_calendar_core.dylib" -o -name "libbs_calendar_core.so" -o -name "libbs_calendar_core.a" -o -name "bs_calendar_core.dll" \) -exec cp -L {} dist/native-${{ matrix.name }}/ \;
-          
-          # Strip symbols to reduce size on macOS
-          if [[ "${{ matrix.target }}" == *"apple-darwin"* ]]; then
-            # Check if dylib exists before stripping
-            if [ -f "dist/native-${{ matrix.name }}/libbs_calendar_core.dylib" ]; then
-              strip -x dist/native-${{ matrix.name }}/libbs_calendar_core.dylib
-            fi
-          fi
+          chmod +x scripts/build-macos.sh
+          ./scripts/build-macos.sh
 
-      - name: Upload artifacts
+      - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: native-${{ matrix.name }}
-          path: dist/native-${{ matrix.name }}/
-
-  build-universal-macos:
-    name: Build Universal macOS Binary
-    runs-on: macos-latest
-    needs: [validate-and-version, build-native]
-    if: needs.validate-and-version.outputs.should_release == 'true'
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download macOS x86_64 artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: native-macos-x86_64
-          path: artifacts/macos-x86_64/
-
-      - name: Download macOS aarch64 artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: native-macos-aarch64
-          path: artifacts/macos-aarch64/
-
-      - name: Create universal binary
-        run: |
-          mkdir -p dist/native-macos-universal
-          
-          # Copy header file
-          cp artifacts/macos-x86_64/bs_calendar_core.h dist/native-macos-universal/
-          
-          # Check if dylibs exist and are not empty
-          ls -lh artifacts/macos-x86_64/libbs_calendar_core.dylib
-          ls -lh artifacts/macos-aarch64/libbs_calendar_core.dylib
-
-          # Create universal binary using lipo
-          lipo -create \
-            artifacts/macos-x86_64/libbs_calendar_core.dylib \
-            artifacts/macos-aarch64/libbs_calendar_core.dylib \
-            -output dist/native-macos-universal/libbs_calendar_core.dylib
-          
-          # Verify the universal binary
-          echo "Universal binary info:"
-          lipo -info dist/native-macos-universal/libbs_calendar_core.dylib
-          file dist/native-macos-universal/libbs_calendar_core.dylib
-          ls -lh dist/native-macos-universal/libbs_calendar_core.dylib
-
-      - name: Upload universal binary
-        uses: actions/upload-artifact@v4
-        with:
-          name: native-macos-universal
-          path: dist/native-macos-universal/
+          name: macos-artifacts
+          path: |
+            dist/BsCalendarCore.xcframework
+            dist/swift/bs_calendar_core.swift
 
   create-release:
     name: Create Release
     runs-on: ubuntu-latest
-    needs: [validate-and-version, build-wasm, build-native, build-universal-macos]
+    needs: [validate-and-version, build-wasm, build-macos]
     if: needs.validate-and-version.outputs.should_release == 'true'
     steps:
       - uses: actions/checkout@v4
@@ -311,11 +206,11 @@ jobs:
           name: wasm
           path: artifacts/wasm/
 
-      - name: Download Universal macOS Binary
+      - name: Download macOS artifacts
         uses: actions/download-artifact@v4
         with:
-          name: native-macos-universal
-          path: artifacts/native-macos-universal/
+          name: macos-artifacts
+          path: artifacts/macos/
 
       - name: Create archives
         run: |
@@ -326,19 +221,41 @@ jobs:
           if [ -d "artifacts/wasm" ]; then
             tar -czf "release/bs_calendar_core-wasm-${VERSION}.tar.gz" -C artifacts wasm/
           fi
-          
-          # Native archives
-          for dir in artifacts/native-*/; do
-            if [ -d "$dir" ]; then
-              platform=$(basename "$dir" | sed 's/native-//')
-              tar -czf "release/bs_calendar_core-native-${platform}-${VERSION}.tar.gz" -C artifacts "$(basename $dir)"
-            fi
-          done
+
+          # macOS Archive
+          if [ -d "artifacts/macos" ]; then
+             # Zip the XCFramework
+             cd artifacts/macos
+             zip -r "../../release/BsCalendarCore.xcframework.zip" BsCalendarCore.xcframework
+             cp bs_calendar_core.swift "../../release/bs_calendar_core.swift"
+             cd ../..
+          fi
           
           # Generate checksums
           cd release
           shasum -a 256 *.tar.gz > SHA256SUMS
           cd ..
+
+      - name: Create macOS release archive
+        if: needs.validate-and-version.outputs.should_release == 'true'
+        run: |
+          VERSION="${{ needs.validate-and-version.outputs.version }}"
+          mkdir -p release
+          
+          if [ -d "artifacts/macos/BsCalendarCore.xcframework" ]; then
+             echo "📦 Packaging macOS artifacts..."
+             cd artifacts/macos
+             
+             # Create a zip containing both the XCFramework and the Swift bindings
+             zip -r "../../release/BsCalendarCore-macos-${VERSION}.zip" BsCalendarCore.xcframework bs_calendar_core.swift
+             
+             cd ../..
+             
+             # Calculate checksum for the new zip
+             cd release
+             shasum -a 256 "BsCalendarCore-macos-${VERSION}.zip" >> SHA256SUMS
+             cd ..
+          fi
 
       - name: Generate changelog
         run: |

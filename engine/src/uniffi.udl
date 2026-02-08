@@ -1,0 +1,245 @@
+// UniFFI Interface Definition for BS Calendar Core
+// This defines the Swift/Kotlin/Python bindings interface
+
+namespace bs_calendar_core {
+  // Create a new calendar engine instance
+  CalendarEngine create_engine();
+};
+
+// Main calendar engine interface
+interface CalendarEngine {
+  // Core date conversion functions
+  [Throws=BsCalendarError]
+  GregorianDate bs_to_gregorian(BsDate date);
+  
+  [Throws=BsCalendarError]
+  BsDate gregorian_to_bs(GregorianDate date);
+  
+  // Astronomical calculations
+  // Astronomical calculations
+  [Throws=BsCalendarError]
+  Tithi get_tithi(GregorianDate date);
+  
+  [Throws=BsCalendarError]
+  ZodiacSign get_sun_zodiac(GregorianDate date);
+  
+  [Throws=BsCalendarError]
+  ZodiacSign get_moon_zodiac(GregorianDate date);
+  
+  [Throws=BsCalendarError]
+  Nakshatra get_nakshatra(GregorianDate date);
+  
+  [Throws=BsCalendarError]
+  DailyAstroInfo get_daily_astro_info(GregorianDate date, Location location);
+  
+  // Sunrise/sunset calculations
+  [Throws=BsCalendarError]
+  TimeOfDay get_sunrise(GregorianDate date, Location location);
+  
+  [Throws=BsCalendarError]
+  TimeOfDay get_sunset(GregorianDate date, Location location);
+  
+  // Recurrence rule generation
+  [Throws=BsCalendarError]
+  sequence<BsDate> generate_bs_instances(BsRecurrenceRule rule, BsDate start, BsDate end);
+  
+  [Throws=BsCalendarError]
+  sequence<GregorianDate> generate_ad_instances(AdRecurrenceRule rule, GregorianDate start, GregorianDate end);
+  
+  [Throws=BsCalendarError]
+  sequence<EventInstance> generate_tithi_instances(
+    string event_id,
+    string title,
+    TithiRecurrenceRule rule,
+    BsDate start,
+    BsDate end,
+    CalendarVersion version,
+    Location location
+  );
+  
+  // Month calendar view
+  [Throws=BsCalendarError]
+  MonthCalendarData get_month_calendar(u16 year, u8 month, Location location);
+  
+  // Formatting and localization
+  string format_bs_date(BsDate date, string pattern, Language lang);
+  string get_tithi_name(Tithi tithi, Language lang);
+  string get_zodiac_name(ZodiacSign zodiac, Language lang);
+  string get_nakshatra_name(Nakshatra nakshatra, Language lang);
+};
+
+// Data structures
+
+dictionary BsDate {
+  u16 year;
+  u8 month;
+  u8 day;
+};
+
+dictionary GregorianDate {
+  i32 year;
+  u32 month;
+  u32 day;
+};
+
+dictionary Location {
+  f64 latitude;
+  f64 longitude;
+};
+
+dictionary TimeOfDay {
+  u32 hour;
+  u32 minute;
+  u32 second;
+};
+
+dictionary Tithi {
+  u8 number;
+  string name;
+  Paksha paksha;
+};
+
+dictionary DailyAstroInfo {
+  Tithi tithi;
+  ZodiacSign sun_sign;
+  ZodiacSign moon_sign;
+  Nakshatra nakshatra;
+  boolean is_overridden;
+};
+
+dictionary CalendarDay {
+  u16 bs_year;
+  u8 bs_month;
+  u8 bs_day;
+  GregorianDate gregorian_date;
+  u8 day_of_week;
+  Tithi tithi;
+  ZodiacSign sun_sign;
+  ZodiacSign moon_sign;
+  Nakshatra nakshatra;
+  boolean is_overridden;
+};
+
+dictionary MonthCalendarData {
+  sequence<CalendarDay> days;
+  u16 year;
+  u8 month;
+  u8 days_in_month;
+  u8 start_day_of_week;
+};
+
+dictionary EventInstance {
+  string id;
+  BsDate bs_date;
+  string title;
+  CalendarVersion version;
+  string? parent_event_id;
+};
+
+dictionary CalendarVersion {
+  string version;
+  boolean is_official;
+};
+
+dictionary BsRecurrenceRule {
+  BsFrequency frequency;
+  u32 interval;
+  sequence<u8>? by_month_day;
+  sequence<u8>? by_month;
+  u32? count;
+};
+
+dictionary AdRecurrenceRule {
+  AdFrequency frequency;
+  u32 interval;
+  sequence<u8>? by_month_day;
+  sequence<u8>? by_month;
+  u32? count;
+};
+
+dictionary TithiRecurrenceRule {
+  sequence<u8> tithis;
+  Paksha? paksha;
+  u32? count;
+};
+
+// Enums
+
+enum Paksha {
+  "Shukla",
+  "Krishna",
+};
+
+enum ZodiacSign {
+  "Aries",
+  "Taurus",
+  "Gemini",
+  "Cancer",
+  "Leo",
+  "Virgo",
+  "Libra",
+  "Scorpio",
+  "Sagittarius",
+  "Capricorn",
+  "Aquarius",
+  "Pisces",
+};
+
+enum Nakshatra {
+  "Ashwini",
+  "Bharani",
+  "Krittika",
+  "Rohini",
+  "Mrigashira",
+  "Ardra",
+  "Punarvasu",
+  "Pushya",
+  "Ashlesha",
+  "Magha",
+  "PurvaPhalguni",
+  "UttaraPhalguni",
+  "Hasta",
+  "Chitra",
+  "Swati",
+  "Vishakha",
+  "Anuradha",
+  "Jyeshtha",
+  "Mula",
+  "PurvaAshadha",
+  "UttaraAshadha",
+  "Shravana",
+  "Dhanishtha",
+  "Shatabhisha",
+  "PurvaBhadrapada",
+  "UttaraBhadrapada",
+  "Revati",
+};
+
+enum BsFrequency {
+  "Daily",
+  "Weekly",
+  "Monthly",
+  "Yearly",
+};
+
+enum AdFrequency {
+  "Daily",
+  "Weekly",
+  "Monthly",
+  "Yearly",
+};
+
+enum Language {
+  "English",
+  "Nepali",
+};
+
+// Error types
+[Error]
+enum BsCalendarError {
+  "InvalidDate",
+  "OutOfRange",
+  "ConversionError",
+  "AstronomicalError",
+  "InvalidRecurrenceRule",
+};

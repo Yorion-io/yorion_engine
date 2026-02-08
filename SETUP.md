@@ -1,6 +1,6 @@
 # Setup Guide
 
-This guide walks you through setting up the release system for the first time.
+This guide walks you through setting up the WASM build and release system.
 
 ## Prerequisites
 
@@ -10,22 +10,19 @@ Install the required tools:
 # Rust toolchain
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
+# Add WASM target
+rustup target add wasm32-unknown-unknown
+
 # cocogitto (conventional commits)
 cargo install --locked cocogitto
 
 # git-cliff (changelog generation)
 cargo install git-cliff
 
-# cross (cross-compilation)
-cargo install cross --git https://github.com/cross-rs/cross
-
 # wasm-pack (WASM builds)
 cargo install wasm-pack
 
-# cbindgen (C header generation)
-cargo install cbindgen
-
-# act (local GitHub Actions testing)
+# act (local GitHub Actions testing - optional)
 brew install act  # macOS
 # or
 curl https://raw.githubusercontent.com/nektos/act/master/install.sh | sudo bash  # Linux
@@ -68,8 +65,8 @@ Then add it to your repository:
 2. Click **Settings** → **Secrets and variables** → **Actions**
 3. Click **New repository secret**
 4. Name: `RELEASE_TOKEN_PAT`
+5. Paste your token
 6. Click **Add secret**
-
 
 ### 3. Enable GitHub Actions
 
@@ -79,11 +76,11 @@ The workflows already include the necessary permissions. Just verify GitHub Acti
 2. Under **Actions permissions**, ensure:
    - ✅ "Allow all actions and reusable workflows" is selected
 3. Under **Workflow permissions**:
-   - ✅ "Read and write permissions" is selected (this allows GITHUB_TOKEN to create releases)
+   - ✅ "Read and write permissions" is selected
    - ✅ "Allow GitHub Actions to create and approve pull requests" is checked
 4. Click **Save**
 
-> **Note**: The workflows now include `permissions: contents: write` which grants the automatic GITHUB_TOKEN the necessary access to create releases and tags. No custom token needed!
+> **Note**: The workflows include `permissions: contents: write` which grants the automatic GITHUB_TOKEN the necessary access to create releases and tags.
 
 ## Initial Commit
 
@@ -94,9 +91,9 @@ Make your first conventional commit:
 git add .
 
 # Make a conventional commit
-git commit -m "feat: initial release system setup
+git commit -m "feat: initial WASM release system setup
 
-- Add WASM, Flutter, and native build scripts
+- Add WASM build scripts for web, bundler, and Node.js
 - Configure GitHub Actions for dev and prod releases
 - Set up semantic versioning with cocogitto
 - Add comprehensive documentation"
@@ -107,21 +104,35 @@ git push origin dev
 
 This will trigger the dev build workflow!
 
-## Testing Locally with act
+## Testing Locally
+
+### Build WASM Locally
+
+```bash
+# Build all WASM targets
+./scripts/build-wasm.sh
+
+# Verify outputs
+ls -lh dist/wasm/
+```
+
+### Run Tests
+
+```bash
+cd engine
+cargo test --all-features
+```
+
+### Test with act (Optional)
 
 Before pushing to GitHub, test the workflows locally:
 
 ```bash
-cd /Users/gummy/BsCalendarCore/00_core
-
-# Test the simple workflow
-act -W .github/workflows/test-local.yml
+# Test dev workflow
+act push -W .github/workflows/dev-build.yml
 
 # Test with secrets (if needed)
-act -W .github/workflows/test-local.yml --secret RELEASE_TOKEN_PAT=<RELEASE_TOKEN_PAT>
-
-# Test dev workflow (will take longer)
-act push -W .github/workflows/dev-build.yml --secret RELEASE_TOKEN_PAT=<RELEASE_TOKEN_PAT>
+act push -W .github/workflows/dev-build.yml --secret RELEASE_TOKEN_PAT=<your_token>
 ```
 
 > **Note**: `act` runs workflows in Docker containers. The first run will download images and may take a while.
@@ -133,9 +144,9 @@ act push -W .github/workflows/dev-build.yml --secret RELEASE_TOKEN_PAT=<RELEASE_
 When you push to `dev`:
 1. ✅ Validates conventional commits
 2. 🧪 Runs tests
-3. 🔨 Builds WASM and native binaries
+3. 🔨 Builds WASM for web, bundler, and Node.js
 4. 📦 Creates pre-release with `-dev` tag
-5. 🚀 Uploads artifacts to GitHub release
+5. 🚀 Uploads WASM artifacts to GitHub release
 
 ### Main Branch Workflow
 
@@ -143,11 +154,11 @@ When you merge to `main`:
 1. ✅ Validates conventional commits
 2. 🔢 Determines next semantic version
 3. 🧪 Runs full test suite
-4. 🔨 Builds all targets (WASM, native for all platforms)
+4. 🔨 Builds WASM for all targets
 5. 📝 Generates changelog with git-cliff
 6. 🏷️ Creates git tag
 7. 📦 Creates GitHub release
-8. 🚀 Uploads all binaries
+8. 🚀 Uploads WASM binaries
 
 ## Making Releases
 
@@ -181,7 +192,7 @@ git push origin main
 # 1. Determine version (e.g., 0.1.0 → 0.2.0)
 # 2. Create tag v0.2.0
 # 3. Generate changelog
-# 4. Create release with all binaries
+# 4. Create release with WASM binaries
 ```
 
 ## Semantic Versioning Rules
@@ -200,20 +211,22 @@ Based on conventional commits:
 If builds fail in GitHub Actions:
 
 1. Check the Actions tab for error logs
-2. Test locally first with the build scripts:
+2. Test locally first:
    ```bash
    ./scripts/build-wasm.sh
-   ./scripts/build-native.sh
    ```
 
-### Cross-Compilation Issues
+### WASM Build Issues
 
-If cross-compilation fails:
+If WASM build fails:
 
-1. Ensure Docker is running (required by `cross`)
-2. Try building locally:
+1. Ensure `wasm-pack` is installed:
    ```bash
-   cross build --target x86_64-unknown-linux-gnu
+   cargo install wasm-pack
+   ```
+2. Verify WASM target is added:
+   ```bash
+   rustup target add wasm32-unknown-unknown
    ```
 
 ### Act Issues
@@ -223,7 +236,7 @@ If `act` fails:
 1. Ensure Docker is running
 2. Use the `-v` flag for verbose output:
    ```bash
-   act -v -W .github/workflows/test-local.yml
+   act -v push -W .github/workflows/dev-build.yml
    ```
 3. Some features may not work in `act` (like creating releases)
 
@@ -231,9 +244,9 @@ If `act` fails:
 
 1. ✅ Install prerequisites
 2. ✅ Create branches (dev, main)
-3. ✅ Configure GitHub token
+3. ✅ Configure GitHub token (if private repo)
 4. ✅ Enable GitHub Actions
-5. ✅ Test locally with act
+5. ✅ Test locally
 6. ✅ Make initial commit to dev
 7. ✅ Verify dev build succeeds
 8. ✅ Merge to main for first release

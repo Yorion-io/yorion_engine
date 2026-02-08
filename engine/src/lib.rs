@@ -48,10 +48,14 @@ pub mod utils;
 #[cfg(feature = "wasm")]
 pub mod wasm;
 
-#[cfg(feature = "flutter")]
-pub mod api;
-#[cfg(feature = "flutter")]
-mod frb_generated;
+#[cfg(feature = "uniffi-bindings")]
+pub mod uniffi_bindings;
+
+#[cfg(feature = "uniffi-bindings")]
+use uniffi_bindings::*;
+
+#[cfg(feature = "uniffi-bindings")]
+uniffi::include_scaffolding!("uniffi");
 
 /// Prelude module for convenient imports
 pub mod prelude {

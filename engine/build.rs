@@ -3,6 +3,18 @@ use std::fs;
 use std::path::Path;
 
 fn main() {
+    generate_calendar_data();
+    generate_tithi_overrides();
+
+    // Generate UniFFI scaffolding when feature is enabled
+    #[cfg(feature = "uniffi-bindings")]
+    {
+        uniffi::generate_scaffolding("src/uniffi.udl")
+            .expect("Failed to generate UniFFI scaffolding");
+    }
+}
+
+fn generate_calendar_data() {
     // Tell Cargo to rerun this build script if the JSON file changes
     println!("cargo:rerun-if-changed=data/bs_calendar_data.json");
 
@@ -149,8 +161,9 @@ fn main() {
         "cargo:warning=Generated calendar data with {} years",
         years.len()
     );
+}
 
-    // --- Tithi Overrides Generation ---
+fn generate_tithi_overrides() {
     use chrono::Datelike;
     println!("cargo:rerun-if-changed=data/tithi_exceptions.csv");
     let exceptions_path = "data/tithi_exceptions.csv";
@@ -197,6 +210,7 @@ fn main() {
     }
     overrides_code.push_str("];\n");
 
+    let out_dir = env::var("OUT_DIR").unwrap();
     let dest_path_overrides = Path::new(&out_dir).join("tithi_overrides_data.rs");
     fs::write(&dest_path_overrides, overrides_code)
         .expect("Failed to write generated tithi_overrides_data.rs");

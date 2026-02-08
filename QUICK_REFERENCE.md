@@ -1,4 +1,4 @@
-# Quick Reference - Release System
+# Quick Reference - WASM Release System
 
 ## 🚀 Making a Release
 
@@ -43,44 +43,33 @@ BREAKING CHANGE: Complete API redesign"
 
 ## 🔧 Local Testing
 
-### Test Workflows with act
-```bash
-# Simple test
-act -W .github/workflows/test-local.yml
-
-# Test dev workflow
-act push -W .github/workflows/dev-build.yml
-```
-
 ### Build Locally
 ```bash
-# WASM
+# Build WASM for all targets
 ./scripts/build-wasm.sh
 
-# Native (all platforms)
-./scripts/build-native.sh
+# Run tests
+cd engine
+cargo test --all-features
+```
 
-# Flutter
-./scripts/build-flutter.sh
-
-# Everything
-./scripts/release.sh
+### Test Workflows with act
+```bash
+# Test dev workflow
+act push -W .github/workflows/dev-build.yml
 ```
 
 ## 📦 Release Artifacts
 
 Each release includes:
-- `bs_calendar_core-wasm-{version}.tar.gz`
-- `bs_calendar_core-native-macos-universal-{version}.tar.gz`
-- `bs_calendar_core-native-linux-x86_64-{version}.tar.gz`
-- `bs_calendar_core-native-linux-aarch64-{version}.tar.gz`
-- `bs_calendar_core-native-windows-x86_64-{version}.tar.gz`
-- `SHA256SUMS` - Checksums
+- `bs_calendar_core-wasm-{version}.tar.gz` - WASM bindings for web, bundler, and Node.js
+- `SHA256SUMS` - Checksums for verification
 
-## 🔐 GitHub Token (Required)
+## 🔐 GitHub Token
 
-Add your Personal Access Token as `RELEASE_TOKEN_PAT`:
+**Public Repositories:** No token needed - `GITHUB_TOKEN` is automatic!
 
+**Private Repositories:** Add Personal Access Token as `RELEASE_TOKEN_PAT`:
 1. Create PAT with `repo` + `workflow` scopes
 2. Add as repository secret: `RELEASE_TOKEN_PAT`
 
@@ -88,12 +77,11 @@ Add your Personal Access Token as `RELEASE_TOKEN_PAT`:
 
 ```bash
 # Install tools
+rustup target add wasm32-unknown-unknown
 cargo install --locked cocogitto
 cargo install git-cliff
-cargo install cross --git https://github.com/cross-rs/cross
 cargo install wasm-pack
-cargo install cbindgen
-brew install act  # for local testing
+brew install act  # for local testing (optional)
 ```
 
 ## 📊 Workflow Status
@@ -109,8 +97,17 @@ Check GitHub Actions tab to see:
 ```bash
 # Test locally first
 cd engine
-cargo build --release
+cargo build --release --features wasm --no-default-features
 cargo test --all-features
+```
+
+### WASM build fails
+```bash
+# Ensure wasm-pack is installed
+cargo install wasm-pack
+
+# Verify WASM target
+rustup target add wasm32-unknown-unknown
 ```
 
 ### Workflow doesn't trigger
@@ -122,5 +119,4 @@ cargo test --all-features
 
 - [README.md](./README.md) - Project overview
 - [SETUP.md](./SETUP.md) - Detailed setup guide
-- [CONSUMING.md](./CONSUMING.md) - Integration examples
-- [walkthrough.md](./.gemini/antigravity/brain/.../walkthrough.md) - Implementation details
+- [CONSUMING.md](./CONSUMING.md) - WASM integration examples

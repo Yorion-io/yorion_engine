@@ -115,24 +115,17 @@ jobs:
           name: wasm-dev
           path: dist/wasm/
 
-  build-native:
-    name: Build Native - ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
+  build-macos:
+    name: Build macOS
+    runs-on: macos-latest
     needs: test
-    strategy:
-      matrix:
-        include:
-          - os: macos-latest
-            target: x86_64-apple-darwin
-          - os: macos-latest
-            target: aarch64-apple-darwin
     steps:
       - uses: actions/checkout@v4
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.target }}
+          targets: x86_64-apple-darwin, aarch64-apple-darwin
 
       - name: Cache cargo registry
         uses: actions/cache@v4
@@ -142,106 +135,21 @@ jobs:
             ~/.cargo/git
           key: ${{ runner.os }}-cargo-deps-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Cache cargo tools
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/bin
-          key: ${{ runner.os }}-cargo-bin-${{ hashFiles('**/Cargo.lock') }}
+      - name: Build macOS artifacts
+        run: ./scripts/build-macos.sh
 
-      - name: Cache target directory
-        uses: actions/cache@v4
-        with:
-          path: engine/target
-          key: ${{ runner.os }}-cargo-target-native-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Install cargo-binstall
-        run: curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
-
-      - name: Install cbindgen
-        run: cargo binstall --no-confirm cbindgen
-
-      - name: Build
-        working-directory: engine
-        run: cargo build --release --target ${{ matrix.target }}
-
-      - name: Generate C header
-        working-directory: engine
-        run: cbindgen --config cbindgen.toml --output ../bs_calendar_core.h
-
-      - name: Prepare artifacts
-        run: |
-          mkdir -p dist/native-${{ matrix.target }}
-          cp bs_calendar_core.h dist/native-${{ matrix.target }}/
-          
-          # Use cp -L to follow symlinks and ensure we get the actual binaries
-          find engine/target/${{ matrix.target }}/release -maxdepth 1 \( -name "libbs_calendar_core.dylib" -o -name "libbs_calendar_core.so" -o -name "libbs_calendar_core.a" -o -name "bs_calendar_core.dll" \) -exec cp -L {} dist/native-${{ matrix.target }}/ \;
-          
-          # Strip symbols to reduce size on macOS
-          if [[ "${{ matrix.target }}" == *"apple-darwin"* ]]; then
-            # Check if dylib exists before stripping
-            if [ -f "dist/native-${{ matrix.target }}/libbs_calendar_core.dylib" ]; then
-              strip -x dist/native-${{ matrix.target }}/libbs_calendar_core.dylib
-            fi
-          fi
-
-      - name: Upload artifacts
+      - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: native-${{ matrix.target }}-dev
-          path: dist/native-${{ matrix.target }}/
-
-  build-universal-macos:
-    name: Build Universal macOS Binary
-    runs-on: macos-latest
-    needs: [test, build-native]
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download macOS x86_64 artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: native-x86_64-apple-darwin-dev
-          path: artifacts/macos-x86_64/
-
-      - name: Download macOS aarch64 artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: native-aarch64-apple-darwin-dev
-          path: artifacts/macos-aarch64/
-
-      - name: Create universal binary
-        run: |
-          mkdir -p dist/native-macos-universal
-          
-          # Copy header file
-          cp artifacts/macos-x86_64/bs_calendar_core.h dist/native-macos-universal/
-          
-          # Check if dylibs exist and are not empty
-          ls -lh artifacts/macos-x86_64/libbs_calendar_core.dylib
-          ls -lh artifacts/macos-aarch64/libbs_calendar_core.dylib
-
-          # Create universal binary using lipo
-          lipo -create \
-            artifacts/macos-x86_64/libbs_calendar_core.dylib \
-            artifacts/macos-aarch64/libbs_calendar_core.dylib \
-            -output dist/native-macos-universal/libbs_calendar_core.dylib
-          
-          # Verify the universal binary
-          echo "Universal binary info:"
-          lipo -info dist/native-macos-universal/libbs_calendar_core.dylib
-          file dist/native-macos-universal/libbs_calendar_core.dylib
-          ls -lh dist/native-macos-universal/libbs_calendar_core.dylib
-
-      - name: Upload universal binary
-        uses: actions/upload-artifact@v4
-        with:
-          name: native-macos-universal-dev
-          path: dist/native-macos-universal/
+          name: macos-artifacts-dev
+          path: |
+            dist/BsCalendarCore.xcframework
+            dist/swift/bs_calendar_core.swift
 
   create-dev-release:
     name: Create Dev Pre-release
     runs-on: ubuntu-latest
-    needs: [build-wasm, build-native, build-universal-macos]
+    needs: [build-wasm]
     if: github.ref == 'refs/heads/dev'
     steps:
       - uses: actions/checkout@v4
@@ -289,7 +197,6 @@ jobs:
             
             ### Artifacts
             - WASM bindings (for NestJS/web)
-            - Universal macOS binary (Intel + Apple Silicon)
             
             ⚠️ This is a pre-release build for testing purposes.
         env:
