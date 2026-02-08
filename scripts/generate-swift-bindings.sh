@@ -9,13 +9,10 @@ echo "🔧 Generating Swift bindings..."
 
 mkdir -p dist/swift
 
-# Check if uniffi-bindgen is in PATH, otherwise use cargo run
-if command -v uniffi-bindgen &> /dev/null; then
-    BINDGEN_CMD="uniffi-bindgen"
-else
-    echo "💡 uniffi-bindgen not found in PATH, falling back to cargo run (this will be slower local-only behavior)..."
-    BINDGEN_CMD="cargo run --release --manifest-path engine/Cargo.toml --features uniffi-bindings --bin uniffi-bindgen --"
-fi
+# We use 'cargo run' from the workspace. 
+# We avoid '--release' because LTO makes it extremely slow to compile the tool.
+# Debug mode is fast enough for binding generation.
+BINDGEN_CMD="cargo run --manifest-path engine/Cargo.toml --features uniffi-bindings --bin uniffi-bindgen --"
 
 # Generate Swift bindings
 $BINDGEN_CMD generate engine/src/uniffi.udl \

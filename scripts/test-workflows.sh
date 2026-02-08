@@ -43,90 +43,85 @@ fi
 
 print_success "act is installed"
 
+# Check architecture for Apple Silicon
+ARCH_OPTS=""
+if [[ "$(uname -m)" == "arm64" ]]; then
+    print_info "Detected Apple Silicon Mac, adding --container-architecture linux/amd64"
+    ARCH_OPTS="--container-architecture linux/amd64"
+fi
+
+# Artifact Server setup (Required for actions/upload-artifact@v4 and cache in act)
+ARTIFACT_PATH="/tmp/artifacts"
+mkdir -p "$ARTIFACT_PATH"
+# We exclude --container-architecture from native host runs as it can cause 'invalid reference format'
+COMMON_OPTS="--artifact-server-path $ARTIFACT_PATH --secret-file .secrets"
+
+# Platform mapping options
+# 1. Containerized - maps macos to Ubuntu (Safer/Logic check)
+CONTAINER_PLAT_OPTS="-P macos-latest=catthehacker/ubuntu:act-22.04"
+# 2. Host Native - runs macos jobs directly on your Mac host
+HOST_PLAT_OPTS="-P macos-latest=-"
+
 # Important note about macOS builds
-print_warning "Note: act doesn't fully support macOS runners natively."
-print_warning "macOS jobs will run in Linux containers and may fail at build steps."
-print_warning "This is mainly useful for testing workflow logic, not actual builds."
+print_warning "Note: You are on a Mac, so you can run macOS jobs directly on your host."
+print_warning "Options 1 & 2 run in Docker (logic check only)."
+print_warning "Option 3 runs NATIVE jobs directly on your host (Mac builds will work)."
 echo ""
 
 # Menu for user selection
 echo "Select which workflow to test:"
-echo "1) Dev Build (dev-build.yml)"
-echo "2) Release (release.yml)"
-echo "3) List all jobs in dev-build.yml"
-echo "4) List all jobs in release.yml"
-echo "5) Run specific job from dev-build.yml"
-echo "6) Run specific job from release.yml"
-echo "7) Dry run (show what would run)"
+echo "1) Dev Build (dev-build.yml) - Linux Containers"
+echo "2) Release (release.yml) - Linux Containers"
+echo "3) Dev Build (dev-build.yml) - NATIVE HOST (Runs macos-latest jobs on your Mac!)"
+echo "4) Build WASM only (Linux Container)"
+echo "5) List all jobs"
+echo "6) Dry run (Native Host Routing)"
 echo ""
-read -p "Enter your choice (1-7): " choice
+read -p "Enter your choice (1-6): " choice
 
 case $choice in
     1)
-        print_info "Testing Dev Build workflow..."
-        print_info "This will simulate a push to the 'dev' branch"
-        act push \
+        print_info "Testing Dev Build (Linux Containers)..."
+        act push $COMMON_OPTS $ARCH_OPTS $CONTAINER_PLAT_OPTS \
             --workflows .github/workflows/dev-build.yml \
-            --secret-file .secrets \
             --env GITHUB_REF=refs/heads/dev \
             --verbose
         ;;
     2)
-        print_info "Testing Release workflow..."
-        print_info "This will simulate a push to the 'main' branch"
-        act push \
+        print_info "Testing Release (Linux Containers)..."
+        act push $COMMON_OPTS $ARCH_OPTS $CONTAINER_PLAT_OPTS \
             --workflows .github/workflows/release.yml \
-            --secret-file .secrets \
             --env GITHUB_REF=refs/heads/main \
             --verbose
         ;;
     3)
-        print_info "Listing all jobs in dev-build.yml..."
-        act -l --workflows .github/workflows/dev-build.yml
+        print_info "🚀 Running Dev Build jobs (macos-latest) NATIVELY on your host..."
+        print_info "Linux jobs (WASM/Bindings) will still run in Docker if they use ubuntu-latest."
+        # Note: we omit $ARCH_OPTS here because native host routing doesn't like them
+        act push $COMMON_OPTS $HOST_PLAT_OPTS \
+            --workflows .github/workflows/dev-build.yml \
+            --env GITHUB_REF=refs/heads/dev \
+            --verbose
         ;;
     4)
-        print_info "Listing all jobs in release.yml..."
-        act -l --workflows .github/workflows/release.yml
+        print_info "Running Build WASM job..."
+        act push $COMMON_OPTS $ARCH_OPTS $CONTAINER_PLAT_OPTS \
+            --workflows .github/workflows/dev-build.yml \
+            --job build-wasm \
+            --env GITHUB_REF=refs/heads/dev \
+            --verbose
         ;;
     5)
-        print_info "Available jobs in dev-build.yml:"
+        print_info "Jobs in dev-build.yml:"
         act -l --workflows .github/workflows/dev-build.yml
         echo ""
-        read -p "Enter job name to run: " job_name
-        print_info "Running job: $job_name"
-        act push \
-            --workflows .github/workflows/dev-build.yml \
-            --secret-file .secrets \
-            --job "$job_name" \
-            --env GITHUB_REF=refs/heads/dev \
-            --verbose
+        print_info "Jobs in release.yml:"
+        act -l --workflows .github/workflows/release.yml
         ;;
     6)
-        print_info "Available jobs in release.yml:"
-        act -l --workflows .github/workflows/release.yml
-        echo ""
-        read -p "Enter job name to run: " job_name
-        print_info "Running job: $job_name"
-        act push \
-            --workflows .github/workflows/release.yml \
-            --secret-file .secrets \
-            --job "$job_name" \
-            --env GITHUB_REF=refs/heads/main \
-            --verbose
-        ;;
-    7)
-        print_info "Dry run - showing what would run for dev-build.yml..."
-        act push \
+        print_info "Dry run (Native Host Routing)..."
+        act push $COMMON_OPTS $HOST_PLAT_OPTS \
             --workflows .github/workflows/dev-build.yml \
-            --secret-file .secrets \
-            --env GITHUB_REF=refs/heads/dev \
-            --dryrun
-        echo ""
-        print_info "Dry run - showing what would run for release.yml..."
-        act push \
-            --workflows .github/workflows/release.yml \
-            --secret-file .secrets \
-            --env GITHUB_REF=refs/heads/main \
             --dryrun
         ;;
     *)
