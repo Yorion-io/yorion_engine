@@ -52,27 +52,52 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Cache cargo registry
-        uses: actions/cache@v4
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
         with:
-          path: ~/.cargo/registry
-          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Cache cargo index
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/git
-          key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Cache target directory
-        uses: actions/cache@v4
-        with:
-          path: engine/target
-          key: ${{ runner.os }}-cargo-target-${{ hashFiles('**/Cargo.lock') }}
+          workspaces: engine
 
       - name: Run tests
         working-directory: engine
         run: cargo test --all-features
+
+  generate-bindings:
+    name: Generate Bindings
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: engine
+
+      - name: Cache cargo tools
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin
+          key: ${{ runner.os }}-cargo-bin-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install cargo-binstall
+        run: curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+
+      - name: Install uniffi-bindgen
+        run: cargo binstall --no-confirm uniffi_bindgen
+
+      - name: Generate Bindings
+        run: |
+          chmod +x scripts/generate-swift-bindings.sh
+          ./scripts/generate-swift-bindings.sh
+
+      - name: Upload bindings
+        uses: actions/upload-artifact@v4
+        with:
+          name: swift-bindings-dev
+          path: dist/swift/
 
   build-wasm:
     name: Build WASM
@@ -86,13 +111,10 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
 
-      - name: Cache cargo registry
-        uses: actions/cache@v4
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: ${{ runner.os }}-cargo-deps-${{ hashFiles('**/Cargo.lock') }}
+          workspaces: engine
 
       - name: Cache cargo tools
         uses: actions/cache@v4
@@ -127,13 +149,10 @@ jobs:
         with:
           targets: x86_64-apple-darwin
 
-      - name: Cache cargo registry
-        uses: actions/cache@v4
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: ${{ runner.os }}-cargo-deps-${{ hashFiles('**/Cargo.lock') }}
+          workspaces: engine
 
       - name: Build x86_64
         run: |
@@ -158,15 +177,12 @@ jobs:
         with:
           targets: aarch64-apple-darwin
 
-      - name: Cache cargo registry
-        uses: actions/cache@v4
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: ${{ runner.os }}-cargo-deps-${{ hashFiles('**/Cargo.lock') }}
+          workspaces: engine
 
-      - name: Build arm64 & Bindings
+      - name: Build arm64
         run: |
           chmod +x scripts/build-macos-arm64.sh
           ./scripts/build-macos-arm64.sh
@@ -177,16 +193,10 @@ jobs:
           name: macos-arm64-dev
           path: dist/aarch64/libbs_calendar_core.a
 
-      - name: Upload bindings
-        uses: actions/upload-artifact@v4
-        with:
-          name: swift-bindings-dev
-          path: dist/swift/
-
   package-macos:
     name: Package macOS
     runs-on: macos-latest
-    needs: [build-macos-x86, build-macos-arm64]
+    needs: [build-macos-x86, build-macos-arm64, generate-bindings]
     steps:
       - uses: actions/checkout@v4
 
@@ -272,6 +282,8 @@ jobs:
             
             ### Artifacts
             - WASM bindings (for NestJS/web)
+            - macOS XCFramework (Universal)
+            - Swift Bindings
             
             ⚠️ This is a pre-release build for testing purposes.
         env:
