@@ -48,10 +48,13 @@ jobs:
         id: version
         run: |
           # Get current version from Cargo.toml
-          CURRENT_VERSION=$(grep '^version' engine/Cargo.toml | head -1 | cut -d'"' -f2)
+          CURRENT_VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' engine/Cargo.toml | head -1)
+          echo "Current version from Cargo.toml: ${CURRENT_VERSION}"
           
           # Check if there are new commits since last tag
           LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          echo "Last tag found: ${LAST_TAG}"
+          
           if [ -z "$LAST_TAG" ]; then
             # No tags yet, use version from Cargo.toml
             NEXT_VERSION="$CURRENT_VERSION"
@@ -59,22 +62,30 @@ jobs:
           else
             # Check if there are new commits
             NEW_COMMITS=$(git rev-list ${LAST_TAG}..HEAD --count)
+            echo "New commits since last tag: ${NEW_COMMITS}"
+            
             if [ "$NEW_COMMITS" -eq "0" ]; then
               echo "No new commits since last release"
               SHOULD_RELEASE="false"
               NEXT_VERSION="$CURRENT_VERSION"
             else
               # Use cocogitto to bump version
-              cog bump --auto --dry-run > bump_output.txt || true
-              NEXT_VERSION=$(cat bump_output.txt | grep -oP 'v\K[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "$CURRENT_VERSION")
+              BUMP_OUTPUT=$(cog bump --auto --dry-run 2>&1 || true)
+              echo "BUMP_OUTPUT: ${BUMP_OUTPUT}"
+              
+              NEXT_VERSION=$(echo "$BUMP_OUTPUT" | grep -oP 'v\K[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+              if [ -z "$NEXT_VERSION" ]; then
+                echo "Warning: NEXT_VERSION not detected by cog, falling back to CURRENT_VERSION"
+                NEXT_VERSION="$CURRENT_VERSION"
+              fi
               SHOULD_RELEASE="true"
             fi
           fi
           
           echo "version=${NEXT_VERSION}" >> $GITHUB_OUTPUT
           echo "should_release=${SHOULD_RELEASE}" >> $GITHUB_OUTPUT
-          echo "Next version: ${NEXT_VERSION}"
-          echo "Should release: ${SHOULD_RELEASE}"
+          echo "Final version set: ${NEXT_VERSION}"
+          echo "Should release set: ${SHOULD_RELEASE}"
 
   test:
     name: Run Tests
@@ -311,7 +322,9 @@ jobs:
         run: curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
 
       - name: Install git-cliff
-        run: cargo binstall --no-confirm git-cliff
+        run: |
+          cargo binstall --no-confirm git-cliff
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -337,9 +350,9 @@ jobs:
           VERSION="${{ needs.validate-and-version.outputs.version }}"
           LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
           if [ -z "$LAST_TAG" ]; then
-            git cliff --tag "v${VERSION}" --unreleased --strip all > CHANGELOG_RELEASE.md
+            git-cliff --tag "v${VERSION}" --unreleased --strip all > CHANGELOG_RELEASE.md
           else
-            git cliff --tag "v${VERSION}" ${LAST_TAG}..HEAD --strip all > CHANGELOG_RELEASE.md
+            git-cliff --tag "v${VERSION}" ${LAST_TAG}..HEAD --strip all > CHANGELOG_RELEASE.md
           fi
 
       - name: Update Cargo.toml version

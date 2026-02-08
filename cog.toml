@@ -7,15 +7,18 @@ branch_whitelist = ["main", "dev"]
 # Ignore merge commits when generating changelog
 ignore_merge_commits = true
 
+# Tag prefix
+tag_prefix = "v"
+
 # Pre-bump hooks - run before version bump
-[pre_bump_hooks]
-# Ensure working directory is clean
-"git diff --quiet" = { error_message = "Working directory is not clean" }
+pre_bump_hooks = [
+    "git diff --quiet"
+]
 
 # Post-bump hooks - run after version bump but before tag
-[post_bump_hooks]
-# Update Cargo.toml version
-"cargo build --release" = { error_message = "Build failed" }
+post_bump_hooks = [
+    "cargo build --release"
+]
 
 # Commit types configuration
 [commit_types]
@@ -43,6 +46,3 @@ template = "remote"
 remote = "github.com"
 repository = "engine"
 owner = "CalNep"
-
-# Tag prefix
-tag_prefix = "v"
