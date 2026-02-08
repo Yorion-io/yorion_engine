@@ -286,10 +286,10 @@ jobs:
           chmod +x scripts/package-macos.sh
           ./scripts/package-macos.sh
 
-      - name: Upload macOS artifacts
+      - name: Upload Apple artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: macos-artifacts
+          name: apple-assets
           path: |
             dist/BsCalendarCore.xcframework
             dist/swift/bs_calendar_core.swift
@@ -333,9 +333,16 @@ jobs:
           VERSION="${{ needs.validate-and-version.outputs.version }}"
           mkdir -p release
           cd artifacts
-          for dir in */; do
-            tar -czf "../release/${dir%/}-${VERSION}.tar.gz" "$dir"
-          done
+          
+          # Handle apple-assets (contains directory and file)
+          if [ -d "apple-assets" ]; then
+            tar -czf "../release/apple-assets-${VERSION}.tar.gz" -C apple-assets .
+          fi
+          
+          # Handle wasm (rename to wasm-assets)
+          if [ -d "wasm" ]; then
+            tar -czf "../release/wasm-assets-${VERSION}.tar.gz" -C wasm .
+          fi
           
           # Generate checksums
           cd ../release

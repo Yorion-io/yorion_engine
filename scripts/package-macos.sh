@@ -19,17 +19,13 @@ lipo -create \
     dist/aarch64/libbs_calendar_core.a \
     -output engine/target/universal-apple-darwin/release/libbs_calendar_core.a
 
-echo "🏗️  Creating XCFramework..."
+# Create XCFramework structure
 rm -rf dist/BsCalendarCore.xcframework
 mkdir -p dist/BsCalendarCore.xcframework/macos-arm64_x86_64/Headers
 
 # Copy universal library
 cp engine/target/universal-apple-darwin/release/libbs_calendar_core.a \
    dist/BsCalendarCore.xcframework/macos-arm64_x86_64/
-
-# Copy Swift bindings (Assumed present in dist/swift from previous step download)
-cp dist/swift/bs_calendar_core.swift \
-   dist/BsCalendarCore.xcframework/
 
 # Copy module map if it exists
 if [ -f "dist/swift/bs_calendar_coreFFI.modulemap" ]; then
