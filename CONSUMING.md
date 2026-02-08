@@ -54,7 +54,7 @@ const bsCalendar = require('./wasm/nodejs/bs_calendar_core.js');
   run: |
     VERSION="0.1.0"
     curl -L -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-      https://github.com/YOUR_USERNAME/bs_calendar_core/releases/download/v${VERSION}/bs_calendar_core-wasm-${VERSION}.tar.gz \
+      https://github.com/CalNep/engine/releases/download/v${VERSION}/bs_calendar_core-wasm-${VERSION}.tar.gz \
       | tar xz -C src/lib/
 ```
 
@@ -71,7 +71,7 @@ mkdir -p packages
 # Download Flutter bindings
 VERSION="0.1.0"
 curl -L -H "Authorization: token $GITHUB_TOKEN" \
-  https://github.com/YOUR_USERNAME/bs_calendar_core/releases/download/v${VERSION}/bs_calendar_core-flutter-${VERSION}.tar.gz \
+  https://github.com/CalNep/engine/releases/download/v${VERSION}/bs_calendar_core-flutter-${VERSION}.tar.gz \
   | tar xz -C packages/
 ```
 
@@ -105,7 +105,7 @@ void main() async {
     VERSION="0.1.0"
     mkdir -p packages
     curl -L -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-      https://github.com/YOUR_USERNAME/bs_calendar_core/releases/download/v${VERSION}/bs_calendar_core-flutter-${VERSION}.tar.gz \
+      https://github.com/CalNep/engine/releases/download/v${VERSION}/bs_calendar_core-flutter-${VERSION}.tar.gz \
       | tar xz -C packages/
     
 - name: Get dependencies
@@ -183,7 +183,7 @@ elif system == "windows":
     platform_name = "windows-x86_64"
 
 # Download URL
-url = f"https://github.com/YOUR_USERNAME/bs_calendar_core/releases/download/v{VERSION}/bs_calendar_core-native-{platform_name}-{VERSION}.tar.gz"
+url = f"https://github.com/CalNep/engine/releases/download/v{VERSION}/bs_calendar_core-native-{platform_name}-{VERSION}.tar.gz"
 
 # Download with authentication
 req = urllib.request.Request(url)
@@ -259,7 +259,7 @@ if [ -z "$GITHUB_TOKEN" ]; then
 fi
 
 curl -L -H "Authorization: token $GITHUB_TOKEN" \
-  https://github.com/YOUR_USERNAME/bs_calendar_core/releases/download/v0.1.0/bs_calendar_core-wasm-0.1.0.tar.gz \
+  https://github.com/CalNep/engine/releases/download/v0.1.0/bs_calendar_core-wasm-0.1.0.tar.gz \
   | tar xz
 ```
 
@@ -271,17 +271,17 @@ curl -L -H "Authorization: token $GITHUB_TOKEN" \
 
 ```bash
 VERSION="0.1.0"
-curl -L https://github.com/YOUR_USERNAME/bs_calendar_core/releases/download/v${VERSION}/...
+curl -L https://github.com/CalNep/engine/releases/download/v${VERSION}/...
 ```
 
 ### Latest Release
 
 ```bash
 # Get latest version
-LATEST=$(curl -s https://api.github.com/repos/YOUR_USERNAME/bs_calendar_core/releases/latest | grep '"tag_name"' | cut -d'"' -f4)
+LATEST=$(curl -s https://api.github.com/repos/CalNep/engine/releases/latest | grep '"tag_name"' | cut -d'"' -f4)
 
 # Download latest
-curl -L https://github.com/YOUR_USERNAME/bs_calendar_core/releases/download/${LATEST}/...
+curl -L https://github.com/CalNep/engine/releases/download/${LATEST}/...
 ```
 
 ### Dev Builds
@@ -289,7 +289,7 @@ curl -L https://github.com/YOUR_USERNAME/bs_calendar_core/releases/download/${LA
 ```bash
 # Use pre-release versions
 VERSION="0.1.0-dev.123"
-curl -L https://github.com/YOUR_USERNAME/bs_calendar_core/releases/download/v${VERSION}/...
+curl -L https://github.com/CalNep/engine/releases/download/v${VERSION}/...
 ```
 
 ---
@@ -325,7 +325,7 @@ echo "Detected platform: $PLATFORM"
 
 ```bash
 # Download checksums
-curl -L https://github.com/YOUR_USERNAME/bs_calendar_core/releases/download/v0.1.0/SHA256SUMS -o SHA256SUMS
+curl -L https://github.com/CalNep/engine/releases/download/v0.1.0/SHA256SUMS -o SHA256SUMS
 
 # Verify
 shasum -a 256 -c SHA256SUMS

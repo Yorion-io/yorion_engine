@@ -41,8 +41,8 @@ post_bump_hooks = []
 path = "CHANGELOG.md"
 template = "remote"
 remote = "github.com"
-repository = "bs_calendar_core"
-owner = "gummy"
+repository = "engine"
+owner = "CalNep"
 
 # Tag prefix
 tag_prefix = "v"

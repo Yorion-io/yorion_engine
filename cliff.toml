@@ -42,7 +42,7 @@ filter_unconventional = true
 split_commits = false
 # Regex for preprocessing commit messages
 commit_preprocessors = [
-    { pattern = '\((\w+\s)?#([0-9]+)\)', replace = "([#${2}](https://github.com/gummy/bs_calendar_core/issues/${2}))" },
+    { pattern = '\((\w+\s)?#([0-9]+)\)', replace = "([#${2}](https://github.com/CalNep/engine/issues/${2}))" },
 ]
 
 # Regex for parsing and grouping commits

@@ -14,24 +14,24 @@ A comprehensive Bikram Sambat calendar engine with automated multi-platform rele
 
 ### From GitHub Releases
 
-Download pre-built binaries from the [Releases](https://github.com/YOUR_USERNAME/bs_calendar_core/releases) page.
+Download pre-built binaries from the [Releases](https://github.com/CalNep/engine/releases) page.
 
 #### WASM
 ```bash
 # Download and extract
-curl -L https://github.com/YOUR_USERNAME/bs_calendar_core/releases/download/v0.1.0/bs_calendar_core-wasm-0.1.0.tar.gz | tar xz
+curl -L https://github.com/CalNep/engine/releases/download/v0.1.0/bs_calendar_core-wasm-0.1.0.tar.gz | tar xz
 ```
 
 #### Native Libraries
 ```bash
 # macOS
-curl -L https://github.com/YOUR_USERNAME/bs_calendar_core/releases/download/v0.1.0/bs_calendar_core-native-macos-universal-0.1.0.tar.gz | tar xz
+curl -L https://github.com/CalNep/engine/releases/download/v0.1.0/bs_calendar_core-native-macos-universal-0.1.0.tar.gz | tar xz
 
 # Linux
-curl -L https://github.com/YOUR_USERNAME/bs_calendar_core/releases/download/v0.1.0/bs_calendar_core-native-linux-x86_64-0.1.0.tar.gz | tar xz
+curl -L https://github.com/CalNep/engine/releases/download/v0.1.0/bs_calendar_core-native-linux-x86_64-0.1.0.tar.gz | tar xz
 
 # Windows
-curl -L https://github.com/YOUR_USERNAME/bs_calendar_core/releases/download/v0.1.0/bs_calendar_core-native-windows-x86_64-0.1.0.tar.gz | tar xz
+curl -L https://github.com/CalNep/engine/releases/download/v0.1.0/bs_calendar_core-native-windows-x86_64-0.1.0.tar.gz | tar xz
 ```
 
 ### Private Repository Access
@@ -44,7 +44,7 @@ export GITHUB_TOKEN=ghp_your_token_here
 
 # Download with authentication
 curl -L -H "Authorization: token $GITHUB_TOKEN" \
-  https://github.com/YOUR_USERNAME/bs_calendar_core/releases/download/v0.1.0/bs_calendar_core-wasm-0.1.0.tar.gz | tar xz
+  https://github.com/CalNep/engine/releases/download/v0.1.0/bs_calendar_core-wasm-0.1.0.tar.gz | tar xz
 ```
 
 ## 📚 Usage
