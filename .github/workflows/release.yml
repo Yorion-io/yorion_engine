@@ -313,61 +313,33 @@ jobs:
       - name: Install git-cliff
         run: cargo binstall --no-confirm git-cliff
 
-      - name: Download WASM artifacts
+      - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          name: wasm
-          path: artifacts/wasm/
-
-      - name: Download macOS artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: macos-artifacts
-          path: artifacts/macos/
+          path: artifacts/
 
       - name: Create archives
         run: |
           VERSION="${{ needs.validate-and-version.outputs.version }}"
           mkdir -p release
-          
-          # WASM archive
-          if [ -d "artifacts/wasm" ]; then
-            tar -czf "release/bs_calendar_core-wasm-${VERSION}.tar.gz" -C artifacts wasm/
-          fi
+          cd artifacts
+          for dir in */; do
+            tar -czf "../release/${dir%/}-${VERSION}.tar.gz" "$dir"
+          done
           
           # Generate checksums
-          cd release
+          cd ../release
           shasum -a 256 *.tar.gz > SHA256SUMS
           cd ..
 
-      - name: Create macOS release archive
-        if: needs.validate-and-version.outputs.should_release == 'true'
-        run: |
-          VERSION="${{ needs.validate-and-version.outputs.version }}"
-          mkdir -p release
-          
-          if [ -d "artifacts/macos/BsCalendarCore.xcframework" ]; then
-             echo "📦 Packaging macOS artifacts..."
-             cd artifacts/macos
-             
-             # Create a zip containing both the XCFramework and the Swift bindings
-             zip -r "../../release/BsCalendarCore-macos-${VERSION}.zip" BsCalendarCore.xcframework bs_calendar_core.swift
-             
-             cd ../..
-             
-             # Calculate checksum for the new zip
-             cd release
-             shasum -a 256 "BsCalendarCore-macos-${VERSION}.zip" >> SHA256SUMS
-             cd ..
-          fi
-
       - name: Generate changelog
         run: |
+          VERSION="${{ needs.validate-and-version.outputs.version }}"
           LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
           if [ -z "$LAST_TAG" ]; then
-            git cliff --unreleased --strip all > CHANGELOG_RELEASE.md
+            git cliff --tag "v${VERSION}" --unreleased --strip all > CHANGELOG_RELEASE.md
           else
-            git cliff ${LAST_TAG}..HEAD --strip all > CHANGELOG_RELEASE.md
+            git cliff --tag "v${VERSION}" ${LAST_TAG}..HEAD --strip all > CHANGELOG_RELEASE.md
           fi
 
       - name: Update Cargo.toml version
