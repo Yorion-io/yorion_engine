@@ -16,4 +16,5 @@ cargo build --release \
 # The artifact is at engine/target/x86_64-apple-darwin/release/libbs_calendar_core.a
 mkdir -p dist/x86_64
 cp engine/target/x86_64-apple-darwin/release/libbs_calendar_core.a dist/x86_64/
+strip -x dist/x86_64/libbs_calendar_core.a
 

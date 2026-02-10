@@ -162,14 +162,3 @@ git commit -m "feat!: redesign API for better ergonomics"
 ├── .cog.toml          # Conventional commits config
 └── cliff.toml         # Changelog config
 ```
-
-## 📄 License
-
-MIT OR Apache-2.0
-
-## 🙏 Acknowledgments
-
-Built with:
-- [cocogitto](https://github.com/cocogitto/cocogitto) - Conventional commits
-- [git-cliff](https://github.com/orhun/git-cliff) - Changelog generation
-- [wasm-pack](https://github.com/rustwasm/wasm-pack) - WASM builds

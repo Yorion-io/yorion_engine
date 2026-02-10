@@ -26,15 +26,16 @@ js-sys = { version = "0.3", optional = true }
 getrandom = { version = "0.2", features = ["js"], optional = true }
 
 # UniFFI for native bindings (Swift, Kotlin, etc.)
-uniffi = { version = "0.28", optional = true, features = ["cli"] }
+uniffi = { version = "0.28", optional = true }
 
-rrule = "0.14.0"
+rrule = { version = "0.14.0", default-features = false }
 
 
 [features]
 default = []
 wasm = ["wasm-bindgen", "serde-wasm-bindgen", "js-sys", "getrandom/js"]
 uniffi-bindings = ["uniffi"]
+uniffi-cli = ["uniffi-bindings", "uniffi/cli"]
 
 [dev-dependencies]
 proptest = "1.0"
