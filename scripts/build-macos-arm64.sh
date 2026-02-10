@@ -19,4 +19,5 @@ cargo build --release \
 
 mkdir -p dist/aarch64
 cp engine/target/aarch64-apple-darwin/release/libbs_calendar_core.a dist/aarch64/
+strip -x dist/aarch64/libbs_calendar_core.a
 
