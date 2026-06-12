@@ -524,10 +524,6 @@ Implementations that validate BS-RRULE strings SHOULD use these codes in error m
 
 ---
 
-### Legacy compatibility (v1.0)
-
-Rules written before v2.0 may use `X-CALENDAR=BS` together with `X-TITHI` for tithi recurrences. The parser treats this combination as `PANCHANGA` family. Serializers MUST emit `X-CALENDAR=PANCHANGA` for new rules; parsers MUST accept the old form indefinitely.
-
 ---
 
 ## Extending the library
