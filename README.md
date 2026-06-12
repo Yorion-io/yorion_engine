@@ -349,7 +349,7 @@ Ready-to-use BS-RRULE strings for Nepal's major festivals (Dashain, Tihar, Shiva
 Teej, Chhath, Buddha Purnima, and 15+ more) with verified Gregorian dates for
 BS 2079–2083 are documented in:
 
-**[docs/19-nepal-festival-rrules.md](../docs/19-nepal-festival-rrules.md)**
+**[engine/docs/bs-rrule-spec.md](engine/docs/bs-rrule-spec.md)**
 
 Every rule in that document is backed by the `festival_ground_truth` test suite
 (208 tests across 53 festivals × BS 2079–2083, validated against official Nepali Panchanga almanac data).
