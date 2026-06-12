@@ -1,6 +1,6 @@
 # 08 — Rust Calendar Engine
 
-**Path:** `engine/engine/`
+**Path:** `engine/`
 **Language:** Rust 2021
 **Outputs:** WASM (NodeJS + Web), Native (Swift/Kotlin via UniFFI)
 
@@ -49,7 +49,7 @@ The engine has **no network calls, no filesystem access, no side effects**. It i
      ┌────────────────────────────────────────────┐
      │                  Bindings                  │
      │  wasm.rs   (wasm-bindgen → JS)             │
-     │  uniffi.rs (UniFFI → Swift/Kotlin)         │
+     │  uniffi_bindings.rs (UniFFI → Swift/Kotlin)         │
      └────────────────────────────────────────────┘
 ```
 
@@ -103,7 +103,7 @@ There is no closed-form formula for BS↔AD conversion. The BS calendar is a sol
 
 ### Anchor Data
 
-`src/adapters/static_calendar_provider.rs` contains a table of anchor points, one per BS year from approximately BS 2000 to BS 2090:
+`src/adapters/static_calendar.rs` contains a table of anchor points, one per BS year from approximately BS 2000 to BS 2090:
 
 ```
 BS 2079 Baishakh 1  =  AD 2022 April 14
@@ -138,7 +138,7 @@ BS 2081: [31, 31, 32, 32, 31, 30, 30, 29, 30, 29, 30, 30]
 
 ## Tithi Calculation
 
-`src/services/astronomical_service.rs`
+`src/services/astronomical.rs`
 
 A Tithi is a lunar day — 1/30th of the synodic month. There are 30 tithis in a lunar month, 15 in Shukla Paksha (waxing) and 15 in Krishna Paksha (waning).
 
@@ -257,7 +257,7 @@ wasm-pack build --target bundler --out-dir pkg/bundler
 
 ## Native Bindings (UniFFI)
 
-`src/uniffi.rs` uses Mozilla's UniFFI framework to generate FFI bindings for:
+`src/uniffi_bindings.rs` uses Mozilla's UniFFI framework to generate FFI bindings for:
 - **Swift** → iOS/macOS app (future)
 - **Kotlin** → Android app (future)
 
@@ -277,7 +277,7 @@ The same `CalendarEngine` struct is exposed via UniFFI attributes. Mobile apps c
 ## Testing
 
 ```
-engine/engine/tests/
+engine/tests/
 ├── conversion_tests.rs      ← BS↔AD round-trip accuracy
 ├── tithi_tests.rs           ← Known tithis verified against published calendars
 ├── recurrence_tests.rs      ← Expansion output verified manually
