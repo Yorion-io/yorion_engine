@@ -68,7 +68,7 @@ Add to `Cargo.toml`:
 
 ```toml
 [dependencies]
-yorion_engine = { git = "https://github.com/Yorion-io/yorion_engine", tag = "v0.1.3" }
+yorion_engine = { git = "https://github.com/Yorion-io/yorion_engine", tag = "v0.1.4" }
 ```
 
 ### Date conversion
@@ -224,7 +224,7 @@ If you need one of these targets today, the engine builds cleanly for all of the
 
 | Tool | Version | Purpose |
 |---|---|---|
-| Rust | ≥ 1.70 | Core compiler |
+| Rust | ≥ 1.82 | Core compiler (MSRV) |
 | `wasm-pack` | latest | WASM compilation |
 | `wasm-opt` | latest (via `binaryen`) | Optional WASM size reduction |
 | `uniffi-bindgen` | 0.28 | Native binding generation |
@@ -524,8 +524,6 @@ Implementations that validate BS-RRULE strings SHOULD use these codes in error m
 
 ---
 
----
-
 ## Extending the library
 
 The library is designed to be extended at three levels:
@@ -550,15 +548,9 @@ impl CalendarProvider for MyProvider {
     fn is_official(&self) -> bool { false }
 }
 
-// Pass your provider to CalendarEngine via the full constructor:
-// use yorion_engine::adapters::StaticTithiOverrideProvider;
-// let engine = CalendarEngine::new_with_provider(
-//     Arc::new(MyProvider),
-//     Box::new(StaticTithiOverrideProvider::new()),
-// );
 ```
 
-> Note: `CalendarEngine::new()` uses the built-in static provider. A custom-provider constructor is not yet in the public API; contributions welcome.
+> `CalendarEngine::new()` uses the built-in static provider. A `new_with_provider` constructor that accepts a custom provider is not yet in the public API — contributions welcome.
 
 ### 2. Custom tithi overrides
 
