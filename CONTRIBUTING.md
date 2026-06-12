@@ -42,6 +42,31 @@ cargo run --example gen_tithi_exceptions
 
 `engine/tests/data/calendar/calendar_20{67..83}.csv` — reference almanac CSV files for ground-truth validation. Almanac tithi data is not available beyond BS 2083; tests for BS 2084+ mark astronomical calculations as unverified estimates.
 
+## Building
+
+```bash
+# WASM (all three targets: web, bundler, nodejs)
+./scripts/build-wasm.sh
+
+# macOS XCFramework + Swift bindings
+./scripts/build-macos-arm64.sh
+./scripts/build-macos-x86.sh
+./scripts/generate-swift-bindings.sh
+./scripts/package-macos.sh
+```
+
+Additional tools needed for releases: `cargo install --locked cocogitto`, `cargo install git-cliff`.
+
+## Release workflow
+
+Push to `dev` → pre-release with `-dev` tag (WASM artifacts uploaded).  
+Merge to `main` → semantic version bump, changelog, full release.
+
+Version is auto-determined from conventional commits:
+- `feat:` → minor (0.1.0 → 0.2.0)
+- `fix:` → patch (0.1.0 → 0.1.1)
+- `feat!:` / `BREAKING CHANGE:` → major (0.1.0 → 1.0.0)
+
 ## Commit style
 
 This project uses [Conventional Commits](https://www.conventionalcommits.org/). Format:
