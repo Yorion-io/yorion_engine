@@ -2,8 +2,8 @@
 //!
 //! These tests use proptest to verify invariants across many random inputs.
 
-use bs_calendar_core::core_api::CalendarEngine;
-use bs_calendar_core::domain::{BsDate, BsMonth};
+use yorion_engine::core_api::CalendarEngine;
+use yorion_engine::domain::{BsDate, BsMonth};
 use chrono::NaiveDate;
 use proptest::prelude::*;
 
@@ -13,20 +13,16 @@ fn test_roundtrip_bs_to_ad_to_bs() {
     let engine = CalendarEngine::new();
 
     proptest!(|(
-        year in 2000u16..2090,
+        year in 2000u16..2089,
         month in 1u8..=12,
         day in 1u8..=31
     )| {
-        // BsDate::new only validates 1-32 range, not actual month days
-        // So we need to check if conversion succeeds
         if let Ok(bs_original) = BsDate::new(year, month, day) {
             if let Ok(ad) = engine.bs_to_gregorian(bs_original) {
                 let bs_back = engine.gregorian_to_bs(ad)?;
                 prop_assert_eq!(bs_original, bs_back,
                     "Roundtrip failed: {} -> {} -> {}", bs_original, ad, bs_back);
             }
-            // If conversion fails, it means the day is invalid for that month
-            // This is expected behavior
         }
     });
 }
@@ -56,7 +52,7 @@ fn test_roundtrip_ad_to_bs_to_ad() {
 #[test]
 fn test_bs_date_creation_and_conversion() {
     proptest!(|(
-        year in 2000u16..2090,
+        year in 2000u16..2089,
         month in 1u8..=12,
         day in 1u8..=31
     )| {

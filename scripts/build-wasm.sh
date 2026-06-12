@@ -48,7 +48,7 @@ fi
 echo -e "${BLUE}Compiling Rust to WASM...${NC}"
 cargo build --target wasm32-unknown-unknown --release --features wasm --no-default-features
 
-WASM_FILE="target/wasm32-unknown-unknown/release/bs_calendar_core.wasm"
+WASM_FILE="target/wasm32-unknown-unknown/release/yorion_engine.wasm"
 
 # Function to generate bindings and optimize
 generate_target() {
@@ -65,8 +65,8 @@ generate_target() {
     if [ -n "$WASM_OPT_BIN" ]; then
         echo "⚡ Optimizing $TARGET_TYPE WASM..."
         "$WASM_OPT_BIN" -Oz --enable-bulk-memory --enable-nontrapping-float-to-int \
-            "../$DIST_DIR/$TARGET_TYPE/bs_calendar_core_bg.wasm" \
-            -o "../$DIST_DIR/$TARGET_TYPE/bs_calendar_core_bg.wasm"
+            "../$DIST_DIR/$TARGET_TYPE/yorion_engine_bg.wasm" \
+            -o "../$DIST_DIR/$TARGET_TYPE/yorion_engine_bg.wasm"
     fi
 }
 
@@ -91,7 +91,7 @@ This directory contains WASM bindings for the BS Calendar Core library.
 
 ### Web (ES Modules)
 ```javascript
-import init, { BsCalendarCore } from './web/bs_calendar_core.js';
+import init, { BsCalendarCore } from './web/yorion_engine.js';
 
 await init();
 // Use the library
@@ -99,13 +99,13 @@ await init();
 
 ### Bundler (webpack, vite, etc.)
 ```javascript
-import { BsCalendarCore } from './bundler/bs_calendar_core.js';
+import { BsCalendarCore } from './bundler/yorion_engine.js';
 // Use the library
 ```
 
 ### Node.js
 ```javascript
-const { BsCalendarCore } = require('./nodejs/bs_calendar_core.js');
+const { BsCalendarCore } = require('./nodejs/yorion_engine.js');
 // Use the library
 ```
 

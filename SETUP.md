@@ -33,7 +33,7 @@ curl https://raw.githubusercontent.com/nektos/act/master/install.sh | sudo bash 
 ### 1. Create Branches
 
 ```bash
-cd /Users/gummy/BsCalendarCore/00_core
+cd /Users/gummy/YorionCore/00_core
 
 # Create dev branch
 git checkout -b dev

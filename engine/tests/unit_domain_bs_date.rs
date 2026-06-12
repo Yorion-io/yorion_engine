@@ -1,5 +1,5 @@
 // Domain BS Date Tests
-use bs_calendar_core::domain::bs_date::{BsDate, BsMonth};
+use yorion_engine::domain::bs_date::{BsDate, BsMonth};
 
 mod helpers;
 

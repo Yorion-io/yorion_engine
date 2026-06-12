@@ -3,7 +3,6 @@ use crate::domain::event::{CalendarVersion, EventInstance};
 use crate::domain::recurrence::tithi_rules::TithiRecurrenceRule;
 use crate::domain::tithi::Location;
 use crate::error::Result;
-use crate::ports::TimeProvider;
 use crate::services::astronomical::AstronomicalService;
 use crate::services::conversion::ConversionService;
 use std::sync::Arc;
@@ -12,19 +11,16 @@ use std::sync::Arc;
 pub struct TithiInstanceGenerator {
     conversion_service: Arc<ConversionService>,
     astronomical_service: Arc<AstronomicalService>,
-    time_provider: Arc<dyn TimeProvider>,
 }
 
 impl TithiInstanceGenerator {
     pub fn new(
         conversion_service: Arc<ConversionService>,
         astronomical_service: Arc<AstronomicalService>,
-        time_provider: Arc<dyn TimeProvider>,
     ) -> Self {
         TithiInstanceGenerator {
             conversion_service,
             astronomical_service,
-            time_provider,
         }
     }
 
@@ -70,6 +66,9 @@ impl TithiInstanceGenerator {
         // A lunar cycle is ~29.5 days, so we can cache this data for that period.
         let mut cached_lunar_data: Option<(f64, BsMonth, bool)> = None; // (next_amavasya_jd, name, is_adhik)
 
+        // X-TAKE=FIRST: track the last BS year for which an instance was emitted.
+        let mut take_first_last_year: Option<u16> = None;
+
         // Iterate through all days in the BS range
         let mut current_bs = actual_start;
 
@@ -101,7 +100,7 @@ impl TithiInstanceGenerator {
 
             // 3. Tithi Calculation (MODERATE)
             let gregorian = self.conversion_service.bs_to_gregorian(current_bs)?;
-            let sunrise_time = self.time_provider.sunrise_time(gregorian, location)?;
+            let sunrise_time = self.astronomical_service.get_sunrise(gregorian, &location)?;
 
             let sunrise_dt = gregorian
                 .and_time(sunrise_time)
@@ -120,14 +119,26 @@ impl TithiInstanceGenerator {
             // Refresh cache if needed (if first run or if we've passed the next Amavasya)
             if cached_lunar_data
                 .as_ref()
-                .is_none_or(|(ama_jd, _, _)| jd > *ama_jd)
+                .is_none_or(|(ama_jd, _, _)| jd >= *ama_jd)
             {
-                let next_amavasya_jd = self.astronomical_service.find_next_amavasya(jd)?;
-                let amavasya_dt = self.jd_to_utc(next_amavasya_jd);
-                let amavasya_bs = self
+                // Amanta system (used in Nepal): the current lunar month is named after
+                // the solar month that *follows* the previous Amavasya.
+                //
+                // Algorithm:
+                //   1. Find the previous Amavasya (the one that started this lunar month).
+                //   2. Convert to BS → get its solar month.
+                //   3. Lunar month name = that solar month's .next().
+                //
+                // The cache expires at the *next* Amavasya (when the next lunar month begins).
+                let prev_amavasya_jd = self.astronomical_service.find_prev_amavasya(jd)?;
+                let prev_amavasya_dt = self.jd_to_utc(prev_amavasya_jd);
+                let prev_amavasya_bs = self
                     .conversion_service
-                    .gregorian_to_bs(amavasya_dt.date_naive())?;
-                let lunar_month_name = amavasya_bs.month.prev();
+                    .gregorian_to_bs(prev_amavasya_dt.date_naive())?;
+                let lunar_month_name = prev_amavasya_bs.month.next();
+
+                // Cache expires when we reach the next Amavasya.
+                let next_amavasya_jd = self.astronomical_service.find_next_amavasya(jd + 1.0)?;
 
                 let is_adhik = if rule.skip_adhik || rule.by_lunar_month.is_some() {
                     self.astronomical_service.is_adhik_month(jd)?
@@ -149,9 +160,27 @@ impl TithiInstanceGenerator {
             let adhik_matches = if rule.skip_adhik { !*is_adhik } else { true };
 
             if lunar_month_matches && adhik_matches && rule.matches_tithi(tithi) {
+                // X-TAKE=FIRST: within each BS year, keep only the first qualifying hit.
+                if rule.take_first {
+                    if take_first_last_year == Some(current_bs.year) {
+                        if let Some(next_day) = self.next_day(current_bs) {
+                            current_bs = next_day;
+                            continue;
+                        } else {
+                            break;
+                        }
+                    }
+                    take_first_last_year = Some(current_bs.year);
+                }
+
                 let instance_id = format!("{}-{}", event_id, current_bs.format());
-                let mut instance =
-                    EventInstance::new(instance_id, current_bs, title.to_string(), version.clone());
+                let mut instance = EventInstance::new(
+                    instance_id,
+                    current_bs,
+                    gregorian,
+                    title.to_string(),
+                    version.clone(),
+                );
                 instance.tithi = Some(tithi);
                 instance.parent_event_id = Some(event_id.to_string());
                 instances.push(instance);
@@ -195,9 +224,10 @@ impl TithiInstanceGenerator {
         let m = ((f * 24.0 - h) * 60.0).floor();
         let s = (((f * 24.0 - h) * 60.0 - m) * 60.0).floor();
 
-        let naive_date =
-            chrono::NaiveDate::from_ymd_opt(year as i32, month as u32, day as u32).unwrap();
-        let naive_time = chrono::NaiveTime::from_hms_opt(h as u32, m as u32, s as u32).unwrap();
+        let naive_date = chrono::NaiveDate::from_ymd_opt(year as i32, month as u32, day as u32)
+            .unwrap_or(chrono::NaiveDate::from_ymd_opt(2000, 1, 1).unwrap());
+        let naive_time = chrono::NaiveTime::from_hms_opt(h as u32, m as u32, s as u32)
+            .unwrap_or(chrono::NaiveTime::from_hms_opt(0, 0, 0).unwrap());
 
         chrono::DateTime::<chrono::Utc>::from_naive_utc_and_offset(
             naive_date.and_time(naive_time),

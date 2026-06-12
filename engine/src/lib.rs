@@ -15,7 +15,7 @@
 //! # Example
 //!
 //! ```rust
-//! use bs_calendar_core::prelude::*;
+//! use yorion_engine::prelude::*;
 //! use std::sync::Arc;
 //!
 //! // Load calendar data
@@ -59,17 +59,13 @@ uniffi::include_scaffolding!("uniffi");
 
 /// Prelude module for convenient imports
 pub mod prelude {
-    pub use crate::adapters::{
-        StaticCalendarProvider, StaticTithiOverrideProvider, SystemTimeProvider,
-    };
+    pub use crate::adapters::{StaticCalendarProvider, StaticTithiOverrideProvider};
     pub use crate::domain::{
         BsDate, BsFrequency, BsMonth, BsRecurrenceRule, CalendarVersion, EventInstance, Location,
         Nakshatra, Paksha, Tithi, TithiRecurrenceRule, ZodiacSign,
     };
     pub use crate::error::{BsCalendarError, Result};
-    pub use crate::ports::{
-        CalendarProvider, LocationProvider, TimeProvider, TithiOverrideProvider,
-    };
+    pub use crate::ports::{CalendarProvider, TithiOverrideProvider};
     pub use crate::services::{
         AstronomicalService, ConversionService, InstanceGenerator, TithiInstanceGenerator,
     };

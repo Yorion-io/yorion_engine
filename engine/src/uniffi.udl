@@ -1,7 +1,7 @@
 // UniFFI Interface Definition for BS Calendar Core
 // This defines the Swift/Kotlin/Python bindings interface
 
-namespace bs_calendar_core {
+namespace yorion_engine {
   // Create a new calendar engine instance
   CalendarEngine create_engine();
 };
@@ -62,6 +62,7 @@ interface CalendarEngine {
   MonthCalendarData get_month_calendar(u16 year, u8 month, Location location);
   
   // Formatting and localization
+  [Throws=BsCalendarError]
   string format_bs_date(BsDate date, string pattern, Language lang);
   string get_tithi_name(Tithi tithi, Language lang);
   string get_zodiac_name(ZodiacSign zodiac, Language lang);
@@ -85,6 +86,9 @@ dictionary GregorianDate {
 dictionary Location {
   f64 latitude;
   f64 longitude;
+  string name;
+  i32 timezone_offset_mins;
+  boolean follow_nepal_social_calendar;
 };
 
 dictionary TimeOfDay {
@@ -131,6 +135,7 @@ dictionary MonthCalendarData {
 dictionary EventInstance {
   string id;
   BsDate bs_date;
+  GregorianDate ad_date;
   string title;
   CalendarVersion version;
   string? parent_event_id;
@@ -160,7 +165,13 @@ dictionary AdRecurrenceRule {
 dictionary TithiRecurrenceRule {
   sequence<u8> tithis;
   Paksha? paksha;
+  BsDate anchor;
   u32? count;
+  BsDate? until;
+  sequence<u8>? by_month;
+  sequence<u8>? by_lunar_month;
+  boolean skip_adhik;
+  boolean take_first;
 };
 
 // Enums

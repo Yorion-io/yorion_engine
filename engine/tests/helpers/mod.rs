@@ -1,12 +1,12 @@
 #![allow(dead_code, unused_imports)]
 
 // Test helpers and utilities
-use bs_calendar_core::core_api::CalendarEngine;
-use bs_calendar_core::domain::{BsDate, BsMonth};
+use yorion_engine::core_api::CalendarEngine;
+use yorion_engine::domain::{BsDate, BsMonth};
 use chrono::NaiveDate;
 
 // Re-export StaticCalendarProvider as TestCalendarProvider for service tests
-pub use bs_calendar_core::adapters::StaticCalendarProvider as TestCalendarProvider;
+pub use yorion_engine::adapters::StaticCalendarProvider as TestCalendarProvider;
 
 /// Create a sample BS date for testing (2080-01-15)
 pub fn sample_bs_date() -> BsDate {

@@ -35,9 +35,33 @@ impl InstanceGenerator {
         start: BsDate,
         end: BsDate,
     ) -> Result<Vec<BsDate>> {
+        // Public, FFI-stable API: returns the bare occurrence dates. The clamp
+        // signal (A1) is dropped here; callers that need it use
+        // `generate_bs_instances_with_clamp` (e.g. the event orchestrator).
+        Ok(self
+            .generate_bs_instances_with_clamp(rule, start, end)?
+            .into_iter()
+            .map(|(date, _intended)| date)
+            .collect())
+    }
+
+    /// Generate BS instances, reporting calendar-intrinsic day-clamping (A1).
+    ///
+    /// Each element is `(occurrence_date, intended_unclamped_date)`. The second
+    /// field is `Some(intended)` when the calendar forced the occurrence to a
+    /// different real day than the rule asked for (a non-existent target day,
+    /// e.g. day 30/31 in a 29-day BS month), and `None` otherwise. This lets the
+    /// orchestrator flag the resulting `EventInstance` as an exception instead of
+    /// silently absorbing the clamp.
+    pub fn generate_bs_instances_with_clamp(
+        &self,
+        rule: &BsRecurrenceRule,
+        start: BsDate,
+        end: BsDate,
+    ) -> Result<Vec<(BsDate, Option<BsDate>)>> {
         rule.validate()?;
 
-        let mut instances = Vec::new();
+        let mut instances: Vec<(BsDate, Option<BsDate>)> = Vec::new();
         let mut current_frame_start = rule.anchor;
         let mut count = 0u32;
 
@@ -45,13 +69,13 @@ impl InstanceGenerator {
         let max_count = rule.count.unwrap_or(u32::MAX);
 
         loop {
-            // Check if we've passed the until date (early check on frame)
-            // But strict check is on candidates
+            // Frame-level UNTIL bound: candidates expanded from a frame never precede
+            // the frame start, so once the frame start is past UNTIL no further frame
+            // can produce an in-bounds candidate. The per-candidate check below remains
+            // authoritative for the boundary frame.
             if let Some(until) = rule.until {
                 if current_frame_start > until {
-                    // If the frame start is way past until, we might stop.
-                    // But strictly we should check candidates.
-                    // For yearly/monthly, frame start might be before until, but candidates after.
+                    break;
                 }
             }
             if current_frame_start > end {
@@ -61,9 +85,9 @@ impl InstanceGenerator {
             }
 
             // Expand candidates from the current frame
-            let candidates = self.expand_candidates(current_frame_start, rule)?;
+            let candidates = self.expand_candidates_with_clamp(current_frame_start, rule)?;
 
-            for candidate in candidates {
+            for (candidate, intended) in candidates {
                 // Stop if we hit count limit
                 if count >= max_count {
                     return Ok(instances);
@@ -86,7 +110,7 @@ impl InstanceGenerator {
                     // The expansion generates POTENTIAL candidates based on BY rules.
                     // We might need to filter them further if there are other constraints.
                     // For now, assume expansion is correct.
-                    instances.push(candidate);
+                    instances.push((candidate, intended));
                     count += 1;
                 }
             }
@@ -106,13 +130,21 @@ impl InstanceGenerator {
         Ok(instances)
     }
 
-    /// Expand the current date into a list of candidate dates based on BYxxx rules
-    fn expand_candidates(&self, date: BsDate, rule: &BsRecurrenceRule) -> Result<Vec<BsDate>> {
-        let mut candidates = Vec::new();
+    /// Expand the current date into a list of candidate dates based on BYxxx rules.
+    ///
+    /// Each candidate is `(date, intended_unclamped_date)`; `intended` is
+    /// `Some(..)` only when BYMONTHDAY named a day that does not exist in that BS
+    /// month and the calendar clamped it (A1). All other candidates carry `None`.
+    fn expand_candidates_with_clamp(
+        &self,
+        date: BsDate,
+        rule: &BsRecurrenceRule,
+    ) -> Result<Vec<(BsDate, Option<BsDate>)>> {
+        let mut candidates: Vec<(BsDate, Option<BsDate>)> = Vec::new();
 
         // If no expansion rules, just return the date itself (implied instance)
         if rule.by_month.is_none() && rule.by_month_day.is_none() && rule.by_day.is_none() {
-            candidates.push(date);
+            candidates.push((date, None));
             return Ok(candidates);
         }
 
@@ -138,7 +170,7 @@ impl InstanceGenerator {
                                 let sub_candidates = self.expand_sub_candidates(new_date, rule)?;
                                 candidates.extend(sub_candidates);
                             } else {
-                                candidates.push(new_date);
+                                candidates.push((new_date, None));
                             }
                         }
                     }
@@ -160,67 +192,20 @@ impl InstanceGenerator {
 
                 // Let's adopt a "Filter + Expand" pipeline.
 
-                // 1. Initial Set: [date]
-                let mut set = vec![date];
+                // 1. Initial Set: [(date, intended_clamp)]
+                let mut set: Vec<(BsDate, Option<BsDate>)> = vec![(date, None)];
 
                 // 2. BYMONTH (Limit) - if present and date.month not in it, clear set
                 if let Some(ref months) = rule.by_month {
-                    set.retain(|d| months.contains(&d.month));
+                    set.retain(|(d, _)| months.contains(&d.month));
                 }
 
                 // 3. BYMONTHDAY (Expand) - if present, replace days in set with new days
-                if let Some(ref days) = rule.by_month_day {
-                    let mut new_set = Vec::new();
-                    for d in set {
-                        let month_days_count =
-                            self.conversion.calendar().get_month_days(d.year, d.month)?;
-                        for &target_day in days {
-                            let clamped = target_day.min(month_days_count);
-                            if let Ok(new_d) = BsDate::from_parts(d.year, d.month, clamped) {
-                                new_set.push(new_d);
-                            }
-                        }
-                    }
-                    set = new_set;
-                }
+                set = self.expand_by_month_day_with_clamp(set, rule)?;
 
                 // 4. BYDAY (Expand/Limit)
                 // For Monthly string: "FREQ=MONTHLY;BYDAY=MO,WE" -> Every Mon/Wed in month. (Expand)
-                if let Some(ref weekdays) = rule.by_day {
-                    let mut new_set = Vec::new();
-                    // If we already expanded by day (e.g. BYMONTHDAY), then BYDAY is a Filter (Limit).
-                    // If we didn't expand by day yet (so set contains just anchor/month-start), expand to all matching weekdays in month.
-
-                    if rule.by_month_day.is_some() {
-                        // Limit/Filter
-                        set.retain(|d| {
-                            if let Ok(greg) = self.conversion.bs_to_gregorian(*d) {
-                                let wd = greg.weekday().num_days_from_sunday() as u8;
-                                weekdays.contains(&wd)
-                            } else {
-                                false
-                            }
-                        });
-                    } else {
-                        // Expand to all occurrences in the month
-                        // For each date in set (which represents a month), find all matching weekdays
-                        for d in set {
-                            let month_days_count =
-                                self.conversion.calendar().get_month_days(d.year, d.month)?;
-                            for day_num in 1..=month_days_count {
-                                if let Ok(scan_date) = BsDate::from_parts(d.year, d.month, day_num)
-                                {
-                                    let greg = self.conversion.bs_to_gregorian(scan_date)?;
-                                    let wd = greg.weekday().num_days_from_sunday() as u8;
-                                    if weekdays.contains(&wd) {
-                                        new_set.push(scan_date);
-                                    }
-                                }
-                            }
-                        }
-                        set = new_set;
-                    }
-                }
+                set = self.expand_or_filter_by_day(set, rule)?;
 
                 candidates.extend(set);
             }
@@ -261,7 +246,8 @@ impl InstanceGenerator {
                     set = new_set;
                 }
 
-                candidates.extend(set);
+                // Weekly never names a non-existent day → no clamp signal.
+                candidates.extend(set.into_iter().map(|d| (d, None)));
             }
             BsFrequency::Daily => {
                 // Simple filtering
@@ -270,7 +256,17 @@ impl InstanceGenerator {
                     set.retain(|d| months.contains(&d.month));
                 }
                 if let Some(ref days) = rule.by_month_day {
-                    set.retain(|d| days.contains(&d.day)); // No clamping here? strict equality
+                    // Clamp target days to the month length (consistent with Monthly/
+                    // Yearly), so the last-day sentinel BYMONTHDAY=32 resolves to the
+                    // actual last day instead of never matching.
+                    let mut retained = Vec::new();
+                    for d in set {
+                        let month_days = self.conversion.calendar().get_month_days(d.year, d.month)?;
+                        if days.iter().any(|&t| t.min(month_days) == d.day) {
+                            retained.push(d);
+                        }
+                    }
+                    set = retained;
                 }
                 if let Some(ref weekdays) = rule.by_day {
                     set.retain(|d| {
@@ -282,69 +278,119 @@ impl InstanceGenerator {
                         }
                     });
                 }
-                candidates.extend(set);
+                // Daily BYMONTHDAY is a filter, not an expand → no clamp signal.
+                candidates.extend(set.into_iter().map(|d| (d, None)));
             }
         }
+
+        // Candidates must be ascending within a frame: generate_bs_instances relies
+        // on ascending order for its count/until/end early-returns. BYMONTHDAY and
+        // BYMONTH expansions push in rule-list order, which may be unsorted. Sort by
+        // the real occurrence date; on ties, order clamped (Some) before unclamped
+        // (None) so the A1 signal survives the dedup below.
+        candidates.sort_by(|a, b| a.0.cmp(&b.0).then(b.1.is_some().cmp(&a.1.is_some())));
+        // A2 (collision after clamp): two BY targets can clamp onto the same real
+        // day (e.g. BYMONTHDAY=30,31 both -> 29 in a 29-day month). Dedup by the
+        // real day so it is not emitted as two instances within one frame.
+        candidates.dedup_by_key(|(date, _)| *date);
 
         Ok(candidates)
     }
 
-    /// Helper for Yearly sub-expansion (same logic as Monthly roughly)
-    fn expand_sub_candidates(&self, date: BsDate, rule: &BsRecurrenceRule) -> Result<Vec<BsDate>> {
+    /// Helper for Yearly sub-expansion (same logic as Monthly roughly).
+    ///
+    /// Returns `(date, intended_unclamped_date)` candidates; `intended` is
+    /// `Some(..)` only where BYMONTHDAY named a day that did not exist in the month
+    /// and was clamped (A1).
+    fn expand_sub_candidates(
+        &self,
+        date: BsDate,
+        rule: &BsRecurrenceRule,
+    ) -> Result<Vec<(BsDate, Option<BsDate>)>> {
         // Treat `date` as defining the Month we are in.
         // Apply BYMONTHDAY and BYDAY as if it was Monthly freq for that specific month.
 
-        let mut set = vec![date];
+        let set: Vec<(BsDate, Option<BsDate>)> = vec![(date, None)];
 
-        // BYMONTHDAY (Expand)
-        if let Some(ref days) = rule.by_month_day {
-            let mut new_set = Vec::new();
-            for d in set {
-                let month_days_count =
-                    self.conversion.calendar().get_month_days(d.year, d.month)?;
-                for &target_day in days {
-                    let clamped = target_day.min(month_days_count);
-                    if let Ok(new_d) = BsDate::from_parts(d.year, d.month, clamped) {
-                        new_set.push(new_d);
-                    }
+        // BYMONTHDAY (Expand), then BYDAY (Expand/Limit) — shared with the Monthly branch.
+        let set = self.expand_by_month_day_with_clamp(set, rule)?;
+        let set = self.expand_or_filter_by_day(set, rule)?;
+
+        Ok(set)
+    }
+
+    /// BYMONTHDAY expansion with A1 clamp tracking. For each `(date, _)` in `set`,
+    /// emit one candidate per `rule.by_month_day` target, clamping the target to the
+    /// month length. When a target named a day that did not exist in the month, the
+    /// returned `intended` carries the un-clamped date (the A1 signal); otherwise it
+    /// is `None`. When `rule.by_month_day` is absent the set is returned unchanged.
+    fn expand_by_month_day_with_clamp(
+        &self,
+        set: Vec<(BsDate, Option<BsDate>)>,
+        rule: &BsRecurrenceRule,
+    ) -> Result<Vec<(BsDate, Option<BsDate>)>> {
+        let Some(ref days) = rule.by_month_day else {
+            return Ok(set);
+        };
+        let mut new_set = Vec::new();
+        for (d, _) in set {
+            let month_days_count = self.conversion.calendar().get_month_days(d.year, d.month)?;
+            for &target_day in days {
+                let clamped = target_day.min(month_days_count);
+                if let Ok(new_d) = BsDate::from_parts(d.year, d.month, clamped) {
+                    let intended = if clamped != target_day {
+                        BsDate::from_parts(d.year, d.month, target_day).ok()
+                    } else {
+                        None
+                    };
+                    new_set.push((new_d, intended));
                 }
             }
-            set = new_set;
         }
+        Ok(new_set)
+    }
 
-        // BYDAY
-        if let Some(ref weekdays) = rule.by_day {
+    /// BYDAY for Monthly/Yearly frames. When BYMONTHDAY was also present the set has
+    /// already been expanded to concrete days, so BYDAY acts as a weekday *filter*.
+    /// Otherwise each entry represents a month and BYDAY *expands* to every matching
+    /// weekday in that month. When `rule.by_day` is absent the set is unchanged.
+    fn expand_or_filter_by_day(
+        &self,
+        mut set: Vec<(BsDate, Option<BsDate>)>,
+        rule: &BsRecurrenceRule,
+    ) -> Result<Vec<(BsDate, Option<BsDate>)>> {
+        let Some(ref weekdays) = rule.by_day else {
+            return Ok(set);
+        };
+        if rule.by_month_day.is_some() {
+            // Limit/Filter
+            set.retain(|(d, _)| {
+                if let Ok(greg) = self.conversion.bs_to_gregorian(*d) {
+                    let wd = greg.weekday().num_days_from_sunday() as u8;
+                    weekdays.contains(&wd)
+                } else {
+                    false
+                }
+            });
+            Ok(set)
+        } else {
+            // Expand to all matching weekdays in each month represented by the set.
             let mut new_set = Vec::new();
-            if rule.by_month_day.is_some() {
-                // Limit
-                set.retain(|d| {
-                    if let Ok(greg) = self.conversion.bs_to_gregorian(*d) {
+            for (d, _) in set {
+                let month_days_count =
+                    self.conversion.calendar().get_month_days(d.year, d.month)?;
+                for day_num in 1..=month_days_count {
+                    if let Ok(scan_date) = BsDate::from_parts(d.year, d.month, day_num) {
+                        let greg = self.conversion.bs_to_gregorian(scan_date)?;
                         let wd = greg.weekday().num_days_from_sunday() as u8;
-                        weekdays.contains(&wd)
-                    } else {
-                        false
-                    }
-                });
-            } else {
-                // Expand to all occurrences in the month
-                for d in set {
-                    let month_days_count =
-                        self.conversion.calendar().get_month_days(d.year, d.month)?;
-                    for day_num in 1..=month_days_count {
-                        if let Ok(scan_date) = BsDate::from_parts(d.year, d.month, day_num) {
-                            let greg = self.conversion.bs_to_gregorian(scan_date)?;
-                            let wd = greg.weekday().num_days_from_sunday() as u8;
-                            if weekdays.contains(&wd) {
-                                new_set.push(scan_date);
-                            }
+                        if weekdays.contains(&wd) {
+                            new_set.push((scan_date, None));
                         }
                     }
                 }
-                set = new_set;
             }
+            Ok(new_set)
         }
-
-        Ok(set)
     }
 
     /// Generate instances from an AD recurrence rule within a date range
@@ -442,6 +488,15 @@ impl InstanceGenerator {
     /// Generate instances from a Tithi recurrence rule via heuristic search
     ///
     /// Optimized to skip non-matching days by estimating the time to the next target tithi.
+    ///
+    /// Calendar-intrinsic tithi exceptions are handled here by construction:
+    /// - A3 (tithi vriddhi / repeated tithi): a tithi that spans two sunrises matches on
+    ///   BOTH consecutive sunrise-days. The post-match `advance_days(1)` below keeps both —
+    ///   each is a genuine sunrise-day occurrence, so two instances on consecutive days is
+    ///   the *intended* result, not a duplicate.
+    /// - A4 (tithi kshaya / skipped tithi): a target tithi that never touches a sunrise that
+    ///   month simply never matches, so that cycle yields ZERO instances. This silent gap is
+    ///   correct by construction — it is a real astronomical absence, not a bug or an error.
     pub fn generate_tithi_instances(
         &self,
         rule: &crate::domain::recurrence::TithiRecurrenceRule,
@@ -477,10 +532,10 @@ impl InstanceGenerator {
 
             // 1. Calculate Tithi for the current day
             let gregorian = self.conversion.bs_to_gregorian(current)?;
-            let location = crate::domain::tithi::Location::KATHMANDU; // Standard specific location for Tithi
+            let location = crate::domain::tithi::Location::kathmandu();
 
             // Using calculate_tithi_for_date (sunrise)
-            let current_tithi = astro.calculate_tithi_for_date(gregorian, location)?;
+            let current_tithi = astro.calculate_tithi_for_date(gregorian, &location)?;
 
             // 2. Check if it matches
             if rule.matches_tithi(current_tithi) {
@@ -563,9 +618,14 @@ impl InstanceGenerator {
             }
         }
 
-        // Skip Adhik Month if requested
-        // This requires Astro check which is expensive.
-        // For now, ignoring as basic implementation.
+        // A5 (adhik / leap lunar month): this LEGACY heuristic path does NOT honour
+        // `rule.skip_adhik` — detecting an adhik month needs an expensive astronomical
+        // check that is not done here, so a tithi rule can fire one extra time inside
+        // an adhik month. NOTE: the engine's primary tithi path
+        // (`services::tithi_generator::TithiInstanceGenerator`, wired into
+        // `CalendarEngine`) DOES implement `skip_adhik` (see its `is_adhik` /
+        // `adhik_matches` handling). This method is the secondary path and is left
+        // unimplemented for adhik on purpose; the flag is accepted but has no effect here.
 
         Ok(true)
     }

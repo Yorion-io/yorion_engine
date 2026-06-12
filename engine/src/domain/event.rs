@@ -1,7 +1,7 @@
 use crate::domain::bs_date::BsDate;
 use crate::domain::recurrence::Recurrence;
 use crate::domain::tithi::Tithi;
-use chrono::{DateTime, Utc};
+use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 
 /// Unified event definition
@@ -62,6 +62,11 @@ pub struct EventInstance {
     /// BS date of occurrence
     pub bs_date: BsDate,
 
+    /// Gregorian (AD) date of occurrence — the same real day as `bs_date`,
+    /// expressed in the Gregorian calendar. Always populated.
+    #[cfg_attr(feature = "wasm", wasm_bindgen(skip))]
+    pub ad_date: NaiveDate,
+
     /// Optional tithi if this is a tithi-based event
     pub tithi: Option<Tithi>,
 
@@ -71,25 +76,17 @@ pub struct EventInstance {
     /// Calendar version used to generate this instance
     pub calendar_version: CalendarVersion,
 
-    /// Whether this instance is an exception/override
+    /// Whether this instance departs from a naive reading of the rule. Currently
+    /// set only for calendar-intrinsic day-clamping (a non-existent target day
+    /// forced onto the last valid day of the month).
     pub is_exception: bool,
 
     /// Parent event ID if this is a recurring instance
     pub parent_event_id: Option<String>,
 
-    /// Original date if this is a moved instance
+    /// The intended (un-clamped) BS date when `is_exception` is set because the
+    /// calendar clamped the rule's target day; `None` otherwise.
     pub original_date: Option<BsDate>,
-
-    /// Whether this instance is cancelled
-    pub is_cancelled: bool,
-
-    /// Creation timestamp (skipped for WASM)
-    #[cfg_attr(feature = "wasm", wasm_bindgen(skip))]
-    pub created_at: DateTime<Utc>,
-
-    /// Last update timestamp (skipped for WASM)
-    #[cfg_attr(feature = "wasm", wasm_bindgen(skip))]
-    pub updated_at: DateTime<Utc>,
 }
 
 impl EventInstance {
@@ -97,22 +94,20 @@ impl EventInstance {
     pub fn new(
         id: String,
         bs_date: BsDate,
+        ad_date: NaiveDate,
         title: String,
         calendar_version: CalendarVersion,
     ) -> Self {
-        let now = Utc::now();
         EventInstance {
             id,
             bs_date,
+            ad_date,
             tithi: None,
             title,
             calendar_version,
             is_exception: false,
             parent_event_id: None,
             original_date: None,
-            is_cancelled: false,
-            created_at: now,
-            updated_at: now,
         }
     }
 
@@ -120,11 +115,12 @@ impl EventInstance {
     pub fn from_recurrence(
         id: String,
         bs_date: BsDate,
+        ad_date: NaiveDate,
         title: String,
         calendar_version: CalendarVersion,
         parent_event_id: String,
     ) -> Self {
-        let mut instance = Self::new(id, bs_date, title, calendar_version);
+        let mut instance = Self::new(id, bs_date, ad_date, title, calendar_version);
         instance.parent_event_id = Some(parent_event_id);
         instance
     }
@@ -139,14 +135,6 @@ impl EventInstance {
     pub fn as_exception(mut self, original_date: BsDate) -> Self {
         self.is_exception = true;
         self.original_date = Some(original_date);
-        self.updated_at = Utc::now();
-        self
-    }
-
-    /// Cancel this instance
-    pub fn cancel(mut self) -> Self {
-        self.is_cancelled = true;
-        self.updated_at = Utc::now();
         self
     }
 

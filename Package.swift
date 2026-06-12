@@ -2,29 +2,29 @@
 import PackageDescription
 
 let package = Package(
-    name: "BsCalendarCore",
+    name: "YorionEngine",
     platforms: [
         .macOS(.v12),
         .iOS(.v15)
     ],
     products: [
         .library(
-            name: "BsCalendarCore",
-            targets: ["BsCalendarCore"]
+            name: "YorionEngine",
+            targets: ["YorionEngine"]
         ),
     ],
     targets: [
         // Binary target containing the Rust library
         .binaryTarget(
-            name: "BsCalendarCoreFFI",
-            path: "dist/BsCalendarCore.xcframework"
+            name: "YorionEngineFFI",
+            path: "dist/YorionEngine.xcframework"
         ),
         // Swift wrapper target
         .target(
-            name: "BsCalendarCore",
-            dependencies: ["BsCalendarCoreFFI"],
+            name: "YorionEngine",
+            dependencies: ["YorionEngineFFI"],
             path: "dist/swift",
-            sources: ["bs_calendar_core.swift"]
+            sources: ["yorion_engine.swift"]
         ),
     ]
 )

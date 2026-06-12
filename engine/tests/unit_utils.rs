@@ -1,5 +1,5 @@
-use bs_calendar_core::domain::{BsDate, Language};
-use bs_calendar_core::utils::number_utils::{DateFormatter, NumberUtils};
+use yorion_engine::domain::{BsDate, Language};
+use yorion_engine::utils::number_utils::{DateFormatter, NumberUtils};
 
 mod helpers;
 

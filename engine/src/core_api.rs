@@ -24,15 +24,7 @@ pub struct CalendarEngine {
 }
 
 impl CalendarEngine {
-    /// Create a new engine with default providers
-    ///
-    /// Uses `StaticCalendarProvider` and `StaticTithiOverrideProvider` by default.
     pub fn new() -> Self {
-        Self::with_time_provider(Arc::new(crate::adapters::SystemTimeProvider::new()))
-    }
-
-    /// Create a new engine with a custom time provider
-    pub fn with_time_provider(time_provider: Arc<dyn TimeProvider>) -> Self {
         let provider = Arc::new(StaticCalendarProvider::new());
         let override_provider = Box::new(StaticTithiOverrideProvider::new());
         let astronomical_service = Arc::new(AstronomicalService::with_overrides(override_provider));
@@ -43,7 +35,6 @@ impl CalendarEngine {
             tithi_instance_generator: TithiInstanceGenerator::new(
                 conversion_service.clone(),
                 astronomical_service.clone(),
-                time_provider,
             ),
             conversion_service,
             astronomical_service,
@@ -60,8 +51,8 @@ impl CalendarEngine {
     ///
     /// # Examples
     /// ```
-    /// use bs_calendar_core::core_api::CalendarEngine;
-    /// use bs_calendar_core::domain::BsDate;
+    /// use yorion_engine::core_api::CalendarEngine;
+    /// use yorion_engine::domain::BsDate;
     /// use chrono::Datelike;
     ///
     /// let engine = CalendarEngine::new();
@@ -86,18 +77,20 @@ impl CalendarEngine {
 
     /// Get the Tithi for a specific Gregorian date
     ///
+    /// Returns the tithi active at sunrise (the Hindu calendar convention).
+    ///
     /// # Errors
     /// Returns error if astronomical calculation fails.
     pub fn get_tithi(&self, date: NaiveDate) -> Result<Tithi> {
-        let dt = date.and_hms_opt(12, 0, 0).unwrap().and_utc();
-        self.astronomical_service.calculate_tithi(dt)
+        self.astronomical_service
+            .calculate_tithi_for_date(date, &Location::kathmandu())
     }
 
     /// Get the Sun's zodiac sign for a specific Gregorian date
     pub fn get_sun_zodiac(&self, date: NaiveDate) -> ZodiacSign {
         let jd = self
             .astronomical_service
-            .get_julian_day(date.and_hms_opt(12, 0, 0).unwrap().and_utc());
+            .get_julian_day(date.and_hms_opt(12, 0, 0).expect("12:00:00 is always a valid time").and_utc());
         self.astronomical_service.get_sun_zodiac_sign(jd)
     }
 
@@ -105,7 +98,7 @@ impl CalendarEngine {
     pub fn get_moon_zodiac(&self, date: NaiveDate) -> ZodiacSign {
         let jd = self
             .astronomical_service
-            .get_julian_day(date.and_hms_opt(12, 0, 0).unwrap().and_utc());
+            .get_julian_day(date.and_hms_opt(12, 0, 0).expect("12:00:00 is always a valid time").and_utc());
         self.astronomical_service.get_moon_zodiac_sign(jd)
     }
 
@@ -113,11 +106,13 @@ impl CalendarEngine {
     pub fn get_nakshatra(&self, date: NaiveDate) -> Nakshatra {
         let jd = self
             .astronomical_service
-            .get_julian_day(date.and_hms_opt(12, 0, 0).unwrap().and_utc());
+            .get_julian_day(date.and_hms_opt(12, 0, 0).expect("12:00:00 is always a valid time").and_utc());
         self.astronomical_service.get_nakshatra(jd)
     }
 
     /// Get comprehensive astronomical info for a specific Gregorian date
+    ///
+    /// Returns info calculated at sunrise (the Hindu calendar convention).
     ///
     /// # Errors
     /// Returns error if astronomical calculation fails.
@@ -126,9 +121,8 @@ impl CalendarEngine {
         date: NaiveDate,
         location: Location,
     ) -> Result<DailyAstroInfo> {
-        let dt = date.and_hms_opt(12, 0, 0).unwrap().and_utc();
         self.astronomical_service
-            .get_daily_astro_info(dt, &location)
+            .get_daily_astro_info_for_date(date, &location)
     }
 
     /// Get sunrise time for a specific Gregorian date
@@ -136,7 +130,7 @@ impl CalendarEngine {
     /// # Errors
     /// Returns error if sunrise calculation fails.
     pub fn get_sunrise(&self, date: NaiveDate, location: Location) -> Result<chrono::NaiveTime> {
-        self.astronomical_service.get_sunrise(date, location)
+        self.astronomical_service.get_sunrise(date, &location)
     }
 
     /// Get sunset time for a specific Gregorian date
@@ -144,7 +138,7 @@ impl CalendarEngine {
     /// # Errors
     /// Returns error if sunset calculation fails.
     pub fn get_sunset(&self, date: NaiveDate, location: Location) -> Result<chrono::NaiveTime> {
-        self.astronomical_service.get_sunset(date, location)
+        self.astronomical_service.get_sunset(date, &location)
     }
 
     /// Generate BS recurring instances within a date range
@@ -244,7 +238,7 @@ impl CalendarEngine {
 
             let info = self
                 .astronomical_service
-                .get_daily_astro_info_for_date(gregorian, location)?;
+                .get_daily_astro_info_for_date(gregorian, &location)?;
 
             days.push(CalendarDay {
                 bs_year: year,
@@ -291,10 +285,6 @@ impl CalendarEngine {
 
         for event in events {
             match event.recurrence {
-                crate::domain::recurrence::Recurrence::Once => {
-                    // One-off events - skip for now
-                    // Would need a date field in Recurrence::Once
-                }
                 crate::domain::recurrence::Recurrence::Ad(rule) => {
                     let ads = self.generate_ad_instances(&rule, start_ad, end_ad)?;
                     for ad in ads {
@@ -302,6 +292,7 @@ impl CalendarEngine {
                         instances.push(EventInstance::from_recurrence(
                             format!("{}-{}", event.id, bs.format()),
                             bs,
+                            ad,
                             event.title.clone(),
                             version.clone(),
                             event.id.clone(),
@@ -309,15 +300,29 @@ impl CalendarEngine {
                     }
                 }
                 crate::domain::recurrence::Recurrence::Bs(rule) => {
-                    let bss = self.generate_bs_instances(&rule, start, end)?;
-                    for bs in bss {
-                        instances.push(EventInstance::from_recurrence(
+                    // Use the clamp-aware variant so calendar-intrinsic day-clamping
+                    // (A1: a non-existent target day forced onto the last valid day)
+                    // is surfaced on the instance instead of silently absorbed.
+                    let bss = self
+                        .instance_generator
+                        .generate_bs_instances_with_clamp(&rule, start, end)?;
+                    for (bs, intended) in bss {
+                        let ad = self.bs_to_gregorian(bs)?;
+                        let instance = EventInstance::from_recurrence(
                             format!("{}-{}", event.id, bs.format()),
                             bs,
+                            ad,
                             event.title.clone(),
                             version.clone(),
                             event.id.clone(),
-                        ));
+                        );
+                        // When the calendar clamped the rule's target day, flag the
+                        // instance with the intended (un-clamped) BS date.
+                        let instance = match intended {
+                            Some(orig) => instance.as_exception(orig),
+                            None => instance,
+                        };
+                        instances.push(instance);
                     }
                 }
                 crate::domain::recurrence::Recurrence::Tithi(rule) => {
@@ -328,7 +333,7 @@ impl CalendarEngine {
                         start,
                         end,
                         version.clone(),
-                        location,
+                        location.clone(),
                     )?;
                     instances.extend(tithi_instances);
                 }

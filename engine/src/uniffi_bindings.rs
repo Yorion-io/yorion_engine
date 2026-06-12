@@ -4,10 +4,6 @@
 //! to generate Swift, Kotlin, and Python bindings.
 
 use crate::core_api::{CalendarDay as CoreCalendarDay, CalendarEngine as CoreEngine};
-// Wait, I need CoreCalendarDay for conversation?
-// The error said `From<core_api::CalendarDay>`.
-// So I should keep it but rename it to avoid conflict if I defined CalendarDay locally.
-// I WILL RENAME imports.
 use crate::domain::recurrence::{
     AdRecurrenceRule as CoreAdRecurrenceRule, BsFrequency as CoreBsFrequency,
     BsRecurrenceRule as CoreBsRecurrenceRule, TithiRecurrenceRule as CoreTithiRecurrenceRule,
@@ -70,23 +66,18 @@ impl From<NaiveDate> for GregorianDate {
     }
 }
 
-// TryFrom<GregorianDate> for NaiveDate is defined later? I should check.
-
 #[derive(Debug, Clone)]
 pub struct Location {
     pub latitude: f64,
     pub longitude: f64,
+    pub name: String,
+    pub timezone_offset_mins: i32,
+    pub follow_nepal_social_calendar: bool,
 }
 
 impl From<Location> for CoreLocation {
     fn from(l: Location) -> Self {
-        CoreLocation {
-            latitude: l.latitude,
-            longitude: l.longitude,
-            name: "Custom", // Use string literal for &'static str
-            timezone_offset_mins: 345,
-            follow_nepal_social_calendar: false,
-        }
+        CoreLocation::new(l.latitude, l.longitude, l.name, l.timezone_offset_mins)
     }
 }
 
@@ -95,6 +86,9 @@ impl From<CoreLocation> for Location {
         Location {
             latitude: l.latitude,
             longitude: l.longitude,
+            name: l.name.clone(),
+            timezone_offset_mins: l.timezone_offset_mins,
+            follow_nepal_social_calendar: l.follow_nepal_social_calendar,
         }
     }
 }
@@ -140,12 +134,9 @@ pub struct Tithi {
 
 impl From<CoreTithi> for Tithi {
     fn from(t: CoreTithi) -> Self {
-        // Since CoreTithi doesn't hold the name, and we don't have engine context here,
-        // we use a generic name or formatted number to satisfy the struct.
-        // The actual name fetching via `get_tithi_name` works separately.
         Tithi {
             number: t.day_in_paksha(),
-            name: format!("Tithi {}", t.day_in_paksha()), // Fallback name
+            name: t.name().to_string(),
             paksha: t.paksha().into(),
         }
     }
@@ -417,7 +408,13 @@ pub enum AdFrequency {
 pub struct TithiRecurrenceRule {
     pub tithis: Vec<u8>,
     pub paksha: Option<Paksha>,
+    pub anchor: BsDate,
     pub count: Option<u32>,
+    pub until: Option<BsDate>,
+    pub by_month: Option<Vec<u8>>,
+    pub by_lunar_month: Option<Vec<u8>>,
+    pub skip_adhik: bool,
+    pub take_first: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -464,6 +461,7 @@ impl From<CalendarVersion> for CoreCalendarVersion {
 pub struct EventInstance {
     pub id: String,
     pub bs_date: BsDate,
+    pub ad_date: GregorianDate,
     pub title: String,
     pub version: CalendarVersion,
     pub parent_event_id: Option<String>,
@@ -474,6 +472,7 @@ impl From<CoreEventInstance> for EventInstance {
         EventInstance {
             id: inst.id,
             bs_date: inst.bs_date.into(),
+            ad_date: inst.ad_date.into(),
             title: inst.title,
             version: CalendarVersion {
                 version: inst.calendar_version.version.clone(),
@@ -521,6 +520,7 @@ impl From<CoreError> for BsCalendarError {
             CoreError::AstronomicalError(_) => BsCalendarError::AstronomicalError,
             CoreError::InvalidRecurrenceRule(_)
             | CoreError::InvalidRRule(_)
+            | CoreError::RRuleRejected { .. }
             | CoreError::UnsupportedRRuleFeature(_) => BsCalendarError::InvalidRecurrenceRule,
         }
     }
@@ -630,10 +630,6 @@ impl CalendarEngine {
             BsFrequency::Yearly => CoreBsFrequency::Yearly,
         };
 
-        // Handle possible u8 types for months if that was the mismatch
-        // rule.by_month is Vec<u8>, internal expects Vec<BsMonth> or Vec<u8>?
-        // Internal BsRecurrenceRule definition says: `pub by_month: Option<Vec<BsMonth>>`
-        // So we need to map u8 -> BsMonth
         let by_month = rule.by_month.map(|months| {
             months
                 .into_iter()
@@ -722,24 +718,44 @@ impl CalendarEngine {
         let core_version: CoreCalendarVersion = version.into();
         let core_location: CoreLocation = location.into();
 
-        // Convert u8 tithis to CoreTithi enum (using Shukla variants as representative)
+        let core_anchor: CoreBsDate = rule.anchor.try_into()?;
+
         let tithis: Vec<CoreTithi> = rule
             .tithis
             .iter()
             .filter_map(|&d| CoreTithi::from_paksha_day(CorePaksha::Shukla, d).ok())
             .collect();
 
-        let paksha_filter = rule.paksha.map(|p| CorePaksha::from(p));
+        let paksha_filter = rule.paksha.map(CorePaksha::from);
+
+        let until = rule
+            .until
+            .map(|d| CoreBsDate::try_from(d))
+            .transpose()
+            .map_err(|_| BsCalendarError::InvalidDate)?;
+
+        let by_month = rule.by_month.map(|ms| {
+            ms.iter()
+                .filter_map(|&m| crate::domain::bs_date::BsMonth::from_u8(m).ok())
+                .collect()
+        });
+
+        let by_lunar_month = rule.by_lunar_month.map(|ms| {
+            ms.iter()
+                .filter_map(|&m| crate::domain::bs_date::BsMonth::from_u8(m).ok())
+                .collect()
+        });
 
         let core_rule = CoreTithiRecurrenceRule {
             by_tithi: tithis,
             paksha_filter,
-            anchor: core_start.clone(),
+            anchor: core_anchor,
             count: rule.count,
-            until: None,
-            by_month: None,
-            by_lunar_month: None,
-            skip_adhik: true,
+            until,
+            by_month,
+            by_lunar_month,
+            skip_adhik: rule.skip_adhik,
+            take_first: rule.take_first,
         };
 
         let results = self.core.generate_tithi_instances(
@@ -775,10 +791,10 @@ impl CalendarEngine {
         })
     }
 
-    pub fn format_bs_date(&self, date: BsDate, pattern: String, lang: Language) -> String {
-        let core_date: CoreBsDate = date.try_into().unwrap();
+    pub fn format_bs_date(&self, date: BsDate, pattern: String, lang: Language) -> Result<String, BsCalendarError> {
+        let core_date: CoreBsDate = date.try_into().map_err(|_| BsCalendarError::InvalidDate)?;
         let core_lang: CoreLanguage = lang.into();
-        self.core.format_bs_date(core_date, &pattern, core_lang)
+        Ok(self.core.format_bs_date(core_date, &pattern, core_lang))
     }
 
     pub fn get_tithi_name(&self, tithi: Tithi, lang: Language) -> String {

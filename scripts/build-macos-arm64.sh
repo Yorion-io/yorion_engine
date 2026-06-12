@@ -14,10 +14,10 @@ cargo build --release \
     --manifest-path engine/Cargo.toml
 
 # Artifacts:
-# - engine/target/aarch64-apple-darwin/release/libbs_calendar_core.a
-# - dist/swift/bs_calendar_core.swift
+# - engine/target/aarch64-apple-darwin/release/libyorion_engine.a
+# - dist/swift/yorion_engine.swift
 
 mkdir -p dist/aarch64
-cp engine/target/aarch64-apple-darwin/release/libbs_calendar_core.a dist/aarch64/
-strip -x dist/aarch64/libbs_calendar_core.a
+cp engine/target/aarch64-apple-darwin/release/libyorion_engine.a dist/aarch64/
+strip -x dist/aarch64/libyorion_engine.a
 

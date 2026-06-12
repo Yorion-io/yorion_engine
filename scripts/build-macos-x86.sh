@@ -13,8 +13,8 @@ cargo build --release \
     --no-default-features \
     --manifest-path engine/Cargo.toml
 
-# The artifact is at engine/target/x86_64-apple-darwin/release/libbs_calendar_core.a
+# The artifact is at engine/target/x86_64-apple-darwin/release/libyorion_engine.a
 mkdir -p dist/x86_64
-cp engine/target/x86_64-apple-darwin/release/libbs_calendar_core.a dist/x86_64/
-strip -x dist/x86_64/libbs_calendar_core.a
+cp engine/target/x86_64-apple-darwin/release/libyorion_engine.a dist/x86_64/
+strip -x dist/x86_64/libyorion_engine.a
 

@@ -33,6 +33,11 @@ pub struct TithiRecurrenceRule {
 
     /// Skip occurrences in Adhik (Extra) months
     pub skip_adhik: bool,
+
+    /// Within each yearly cycle, keep only the first qualifying occurrence.
+    /// Used for festivals like Bijaya Dashami where BYMONTH=6,7 would otherwise
+    /// yield two hits per year — X-TAKE=FIRST keeps only the earliest one.
+    pub take_first: bool,
 }
 
 impl TithiRecurrenceRule {
@@ -47,6 +52,7 @@ impl TithiRecurrenceRule {
             by_month: None,
             by_lunar_month: None,
             skip_adhik: true,
+            take_first: false,
         }
     }
 
@@ -61,6 +67,7 @@ impl TithiRecurrenceRule {
             by_month: None,
             by_lunar_month: None,
             skip_adhik: true,
+            take_first: false,
         }
     }
 
@@ -75,17 +82,13 @@ impl TithiRecurrenceRule {
             by_month: None,
             by_lunar_month: None,
             skip_adhik: true,
+            take_first: false,
         }
     }
 
     /// Create a rule for Purnima (full moon)
     pub fn purnima(anchor: BsDate) -> Self {
         TithiRecurrenceRule::new(vec![Tithi::Purnima], anchor)
-    }
-
-    /// Create a rule for Amavasya (new moon)
-    pub fn amavasya(anchor: BsDate) -> Self {
-        TithiRecurrenceRule::new(vec![Tithi::Amavasya], anchor)
     }
 
     /// Set count limit
@@ -115,6 +118,12 @@ impl TithiRecurrenceRule {
     /// Set skip_adhik filter
     pub fn with_skip_adhik(mut self, skip: bool) -> Self {
         self.skip_adhik = skip;
+        self
+    }
+
+    /// Within each BS year, keep only the first qualifying occurrence.
+    pub fn with_take_first(mut self, take_first: bool) -> Self {
+        self.take_first = take_first;
         self
     }
 

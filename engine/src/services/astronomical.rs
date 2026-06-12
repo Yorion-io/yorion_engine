@@ -35,9 +35,10 @@ impl AstronomicalService {
     }
 
     /// Get accurate sunrise time for a given date and location
-    pub fn get_sunrise(&self, date: NaiveDate, location: Location) -> Result<NaiveTime> {
-        let dt = date.and_hms_opt(12, 0, 0).unwrap();
-        let timestamp_ms = dt.and_local_timezone(Utc).unwrap().timestamp_millis();
+    #[allow(deprecated)]
+    pub fn get_sunrise(&self, date: NaiveDate, location: &Location) -> Result<NaiveTime> {
+        let dt = date.and_hms_opt(12, 0, 0).expect("12:00:00 is always a valid time");
+        let timestamp_ms = dt.and_local_timezone(Utc).single().expect("UTC has no ambiguous times").timestamp_millis();
 
         let times = get_times(
             Timestamp(timestamp_ms),
@@ -63,9 +64,10 @@ impl AstronomicalService {
     }
 
     /// Get accurate sunset time for a given date and location
-    pub fn get_sunset(&self, date: NaiveDate, location: Location) -> Result<NaiveTime> {
-        let dt = date.and_hms_opt(12, 0, 0).unwrap();
-        let timestamp_ms = dt.and_local_timezone(Utc).unwrap().timestamp_millis();
+    #[allow(deprecated)]
+    pub fn get_sunset(&self, date: NaiveDate, location: &Location) -> Result<NaiveTime> {
+        let dt = date.and_hms_opt(12, 0, 0).expect("12:00:00 is always a valid time");
+        let timestamp_ms = dt.and_local_timezone(Utc).single().expect("UTC has no ambiguous times").timestamp_millis();
 
         let times = get_times(
             Timestamp(timestamp_ms),
@@ -90,25 +92,6 @@ impl AstronomicalService {
         Ok(sunset_local.time())
     }
 
-    /// Calculate the Tithi for a given date and time.
-    /// Uses the provided timezone offset for override lookup.
-    pub fn calculate_tithi(&self, date_time: DateTime<Utc>) -> Result<Tithi> {
-        // By default, if no location is provided, we use Nepal time and assume
-        // Nepal social calendar for backward compatibility.
-        self.calculate_tithi_with_location(date_time, &Location::KATHMANDU)
-    }
-
-    /// Calculate the Tithi at a specific moment, using a custom offset for override lookup.
-    pub fn calculate_tithi_with_offset(
-        &self,
-        date_time: DateTime<Utc>,
-        offset_mins: i32,
-    ) -> Result<Tithi> {
-        // Create a temporary location for the override lookup
-        let temp_loc = Location::new(0.0, 0.0, "Temp", offset_mins);
-        self.calculate_tithi_with_location(date_time, &temp_loc)
-    }
-
     /// Calculate the Tithi at a specific moment for a given location.
     pub fn calculate_tithi_with_location(
         &self,
@@ -126,7 +109,8 @@ impl AstronomicalService {
     ) -> Result<(Tithi, bool)> {
         // Check for overrides first
         if let Some(ref provider) = self.override_provider {
-            let offset = chrono::FixedOffset::east_opt(location.timezone_offset_mins * 60).unwrap();
+            let offset = chrono::FixedOffset::east_opt(location.timezone_offset_mins * 60)
+                .expect("timezone_offset_mins is within ±24h");
             let local_dt = date_time.with_timezone(&offset);
             if let Some(overridden) = provider.get_override(local_dt.date_naive(), location) {
                 return Ok((overridden, true));
@@ -154,17 +138,19 @@ impl AstronomicalService {
 
     /// Calculate the primary Tithi for a given calendar date at a specific location.
     /// This is the Tithi active at the moment of local sunrise.
-    pub fn calculate_tithi_for_date(&self, date: NaiveDate, location: Location) -> Result<Tithi> {
+    pub fn calculate_tithi_for_date(&self, date: NaiveDate, location: &Location) -> Result<Tithi> {
         let sunrise = self.get_sunrise(date, location)?;
-        let offset = chrono::FixedOffset::east_opt(location.timezone_offset_mins * 60).unwrap();
+        let offset = chrono::FixedOffset::east_opt(location.timezone_offset_mins * 60)
+            .expect("timezone_offset_mins is within ±24h");
 
         let sunrise_dt = date
             .and_time(sunrise)
             .and_local_timezone(offset)
-            .unwrap()
+            .single()
+            .expect("local sunrise time is unambiguous")
             .with_timezone(&Utc);
 
-        self.calculate_tithi_with_location(sunrise_dt, &location)
+        self.calculate_tithi_with_location(sunrise_dt, location)
     }
 
     /// Combined calculation of all daily astronomical info
@@ -193,18 +179,20 @@ impl AstronomicalService {
     pub fn get_daily_astro_info_for_date(
         &self,
         date: NaiveDate,
-        location: Location,
+        location: &Location,
     ) -> Result<DailyAstroInfo> {
         let sunrise = self.get_sunrise(date, location)?;
-        let offset = chrono::FixedOffset::east_opt(location.timezone_offset_mins * 60).unwrap();
+        let offset = chrono::FixedOffset::east_opt(location.timezone_offset_mins * 60)
+            .expect("timezone_offset_mins is within ±24h");
 
         let sunrise_dt = date
             .and_time(sunrise)
             .and_local_timezone(offset)
-            .unwrap()
+            .single()
+            .expect("local sunrise time is unambiguous")
             .with_timezone(&Utc);
 
-        self.get_daily_astro_info(sunrise_dt, &location)
+        self.get_daily_astro_info(sunrise_dt, location)
     }
 
     /// High-precision calculation of solar and lunar ecliptic longitudes
@@ -309,7 +297,8 @@ impl AstronomicalService {
     pub fn get_sun_zodiac_sign_from_long(&self, sun_long: f64) -> ZodiacSign {
         let sidereal_long = self.get_sidereal_longitude(sun_long);
         let index = ((sidereal_long / 30.0).floor() as u8 % 12) + 1;
-        ZodiacSign::from_index(index).unwrap()
+        ZodiacSign::from_index(index)
+            .unwrap_or_else(|| unreachable!("index is always 1..=12 by modular arithmetic"))
     }
 
     /// Get the zodiac sign the moon is currently in (Nirayana/Sidereal)
@@ -322,7 +311,8 @@ impl AstronomicalService {
     pub fn get_moon_zodiac_sign_from_long(&self, moon_long: f64) -> ZodiacSign {
         let sidereal_long = self.get_sidereal_longitude(moon_long);
         let index = ((sidereal_long / 30.0).floor() as u8 % 12) + 1;
-        ZodiacSign::from_index(index).unwrap()
+        ZodiacSign::from_index(index)
+            .unwrap_or_else(|| unreachable!("index is always 1..=12 by modular arithmetic"))
     }
 
     /// Get the Nakshatra for a given JD based on Moon's longitude
@@ -334,9 +324,10 @@ impl AstronomicalService {
     /// Helper: Get Nakshatra from longitude (avoids recalculation)
     pub fn get_nakshatra_from_long(&self, moon_long: f64) -> Nakshatra {
         let sidereal_long = self.get_sidereal_longitude(moon_long);
-        // There are 27 Nakshatras, each 13° 20' (13.333... degrees)
+        // 27 Nakshatras, each 13°20' (360/27 degrees)
         let index = ((sidereal_long / (360.0 / 27.0)).floor() as u8 % 27) + 1;
-        Nakshatra::from_index(index).unwrap()
+        Nakshatra::from_index(index)
+            .unwrap_or_else(|| unreachable!("index is always 1..=27 by modular arithmetic"))
     }
 
     /// Helper to convert tropical longitude to sidereal using Ayanamsa

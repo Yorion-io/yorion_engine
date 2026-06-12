@@ -62,7 +62,7 @@ act push -W .github/workflows/dev-build.yml
 ## 📦 Release Artifacts
 
 Each release includes:
-- `bs_calendar_core-wasm-{version}.tar.gz` - WASM bindings for web, bundler, and Node.js
+- `yorion_engine-wasm-{version}.tar.gz` - WASM bindings for web, bundler, and Node.js
 - `SHA256SUMS` - Checksums for verification
 
 ## 🔐 GitHub Token

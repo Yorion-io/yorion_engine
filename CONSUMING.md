@@ -13,7 +13,7 @@ For direct browser usage with ES modules:
 <html>
 <head>
     <script type="module">
-        import init, * as bsCalendar from './wasm/web/bs_calendar_core.js';
+        import init, * as bsCalendar from './wasm/web/yorion_engine.js';
         
         async function main() {
             await init();
@@ -41,7 +41,7 @@ For use with Vite, Webpack, Rollup, or other bundlers:
 
 ```javascript
 // Install from local path or download from releases
-import init, * as bsCalendar from './wasm/bundler/bs_calendar_core.js';
+import init, * as bsCalendar from './wasm/bundler/yorion_engine.js';
 
 async function setupCalendar() {
     await init();
@@ -67,7 +67,7 @@ setupCalendar();
 For server-side Node.js applications:
 
 ```javascript
-const bsCalendar = require('./wasm/nodejs/bs_calendar_core.js');
+const bsCalendar = require('./wasm/nodejs/yorion_engine.js');
 
 // Use the library
 const engine = bsCalendar.CalendarEngine.new();
@@ -82,7 +82,7 @@ console.log('Tithi:', tithi);
 All WASM targets include TypeScript definitions:
 
 ```typescript
-import init, { CalendarEngine, BsDate } from './wasm/bundler/bs_calendar_core';
+import init, { CalendarEngine, BsDate } from './wasm/bundler/yorion_engine';
 
 async function main() {
     await init();
@@ -103,7 +103,7 @@ async function main() {
   run: |
     VERSION="0.1.0"
     curl -L -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-      https://github.com/CalNep/engine/releases/download/v${VERSION}/bs_calendar_core-wasm-${VERSION}.tar.gz \
+      https://github.com/Yorion-io/yorion_engine/releases/download/v${VERSION}/yorion_engine-wasm-${VERSION}.tar.gz \
       | tar xz -C src/lib/
 ```
 
@@ -139,7 +139,7 @@ if [ -z "$GITHUB_TOKEN" ]; then
 fi
 
 curl -L -H "Authorization: token $GITHUB_TOKEN" \
-  https://github.com/CalNep/engine/releases/download/v0.1.0/bs_calendar_core-wasm-0.1.0.tar.gz \
+  https://github.com/Yorion-io/yorion_engine/releases/download/v0.1.0/yorion_engine-wasm-0.1.0.tar.gz \
   | tar xz
 ```
 
@@ -151,17 +151,17 @@ curl -L -H "Authorization: token $GITHUB_TOKEN" \
 
 ```bash
 VERSION="0.1.0"
-curl -L https://github.com/CalNep/engine/releases/download/v${VERSION}/bs_calendar_core-wasm-${VERSION}.tar.gz | tar xz
+curl -L https://github.com/Yorion-io/yorion_engine/releases/download/v${VERSION}/yorion_engine-wasm-${VERSION}.tar.gz | tar xz
 ```
 
 ### Latest Release
 
 ```bash
 # Get latest version
-LATEST=$(curl -s https://api.github.com/repos/CalNep/engine/releases/latest | grep '"tag_name"' | cut -d'"' -f4)
+LATEST=$(curl -s https://api.github.com/repos/Yorion-io/yorion_engine/releases/latest | grep '"tag_name"' | cut -d'"' -f4)
 
 # Download latest
-curl -L https://github.com/CalNep/engine/releases/download/${LATEST}/bs_calendar_core-wasm-${LATEST#v}.tar.gz | tar xz
+curl -L https://github.com/Yorion-io/yorion_engine/releases/download/${LATEST}/yorion_engine-wasm-${LATEST#v}.tar.gz | tar xz
 ```
 
 ### Dev Builds
@@ -169,7 +169,7 @@ curl -L https://github.com/CalNep/engine/releases/download/${LATEST}/bs_calendar
 ```bash
 # Use pre-release versions
 VERSION="0.1.0-dev.123"
-curl -L https://github.com/CalNep/engine/releases/download/v${VERSION}/bs_calendar_core-wasm-${VERSION}.tar.gz | tar xz
+curl -L https://github.com/Yorion-io/yorion_engine/releases/download/v${VERSION}/yorion_engine-wasm-${VERSION}.tar.gz | tar xz
 ```
 
 ---
@@ -195,7 +195,7 @@ If WASM fails to load:
 
 ```bash
 # Download checksums
-curl -L https://github.com/CalNep/engine/releases/download/v0.1.0/SHA256SUMS -o SHA256SUMS
+curl -L https://github.com/Yorion-io/yorion_engine/releases/download/v0.1.0/SHA256SUMS -o SHA256SUMS
 
 # Verify
 shasum -a 256 -c SHA256SUMS

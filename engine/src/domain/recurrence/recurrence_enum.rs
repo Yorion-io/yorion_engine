@@ -1,12 +1,12 @@
 use crate::domain::recurrence::{
-    AdRecurrenceRule, BsRecurrenceRule, RRuleParser, TithiRecurrenceRule,
+    AdRecurrenceRule, BsRecurrenceRule, TithiRecurrenceRule,
 };
+use crate::domain::recurrence::rrule_parser::RRuleParser;
 use serde::{Deserialize, Deserializer, Serialize};
 
-/// Recurrence type for events
+/// Recurrence rule for an event — BS solar, AD Gregorian, or lunar (panchanga).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub enum Recurrence {
-    Once,
     Ad(AdRecurrenceRule),
     Bs(BsRecurrenceRule),
     Tithi(TithiRecurrenceRule),

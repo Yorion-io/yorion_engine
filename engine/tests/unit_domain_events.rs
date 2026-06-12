@@ -1,10 +1,15 @@
 // Domain Event Tests
-use bs_calendar_core::domain::bs_date::BsDate;
-use bs_calendar_core::domain::event::{CalendarVersion, Event, EventInstance};
-use bs_calendar_core::domain::recurrence::{BsFrequency, Recurrence};
-use bs_calendar_core::domain::tithi::Tithi;
+use yorion_engine::domain::bs_date::BsDate;
+use yorion_engine::domain::event::{CalendarVersion, Event, EventInstance};
+use yorion_engine::domain::recurrence::{BsFrequency, Recurrence};
+use yorion_engine::domain::tithi::Tithi;
+use chrono::NaiveDate;
 
 mod helpers;
+
+fn sample_ad() -> NaiveDate {
+    NaiveDate::from_ymd_opt(2023, 4, 28).unwrap()
+}
 
 #[test]
 fn test_create_event_instance() {
@@ -14,16 +19,17 @@ fn test_create_event_instance() {
     let instance = EventInstance::new(
         "evt-1".to_string(),
         bs_date,
+        sample_ad(),
         "Test Event".to_string(),
         version.clone(),
     );
 
     assert_eq!(instance.id, "evt-1");
     assert_eq!(instance.bs_date, bs_date);
+    assert_eq!(instance.ad_date, sample_ad());
     assert_eq!(instance.title, "Test Event");
     assert_eq!(instance.calendar_version, version);
     assert!(!instance.is_exception);
-    assert!(!instance.is_cancelled);
 }
 
 #[test]
@@ -34,6 +40,7 @@ fn test_recurring_instance() {
     let instance = EventInstance::from_recurrence(
         "evt-1-occ-1".to_string(),
         bs_date,
+        sample_ad(),
         "Recurring Event".to_string(),
         version,
         "evt-1".to_string(),
@@ -50,6 +57,7 @@ fn test_tithi_instance() {
     let instance = EventInstance::new(
         "evt-1".to_string(),
         bs_date,
+        sample_ad(),
         "Ekadashi".to_string(),
         version,
     )
@@ -67,6 +75,7 @@ fn test_exception_instance() {
     let instance = EventInstance::new(
         "evt-1".to_string(),
         bs_date,
+        sample_ad(),
         "Moved Event".to_string(),
         version,
     )
@@ -85,6 +94,7 @@ fn test_needs_reconciliation() {
     let instance = EventInstance::new(
         "evt-1".to_string(),
         bs_date,
+        sample_ad(),
         "Event".to_string(),
         projected_version.clone(),
     );
@@ -98,7 +108,7 @@ fn test_deserialize_bs_rrule() {
     let json = r#"{
         "id": "evt-1",
         "title": "Monthly Event",
-        "recurrence": "FREQ=MONTHLY;DTSTART=20800101;BYMONTHDAY=1,15;X-CALENDAR=BS"
+        "recurrence": "X-CALENDAR=BS;FREQ=MONTHLY;DTSTART=20800101;BYMONTHDAY=1,15"
     }"#;
 
     let event: Event = serde_json::from_str(json).unwrap();
@@ -118,7 +128,7 @@ fn test_deserialize_tithi_rrule() {
     let json = r#"{
         "id": "evt-2",
         "title": "Every Ekadashi",
-        "recurrence": "FREQ=MONTHLY;DTSTART=20800101;X-TITHI=SHUKLA EKADASHI;X-SKIPADHIK=TRUE;X-CALENDAR=BS"
+        "recurrence": "X-CALENDAR=PANCHANGA;FREQ=MONTHLY;DTSTART=20800101;X-TITHI=SHUKLA EKADASHI;X-SKIPADHIK=TRUE"
     }"#;
 
     let event: Event = serde_json::from_str(json).unwrap();

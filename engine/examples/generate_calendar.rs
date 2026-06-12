@@ -1,4 +1,4 @@
-use bs_calendar_core::prelude::*;
+use yorion_engine::prelude::*;
 use std::fs::{create_dir_all, File};
 use std::io::Write;
 use std::sync::Arc;
@@ -42,7 +42,7 @@ fn main() {
 
                 // Get Astronomical Info (at Sunrise in Kathmandu)
                 let astro_info = astronomical_service
-                    .get_daily_astro_info_for_date(ad_date, Location::KATHMANDU)
+                    .get_daily_astro_info_for_date(ad_date, &Location::kathmandu())
                     .expect("Failed to calculate astro info");
 
                 writeln!(

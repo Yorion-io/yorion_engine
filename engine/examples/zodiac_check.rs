@@ -1,4 +1,4 @@
-use bs_calendar_core::prelude::*;
+use yorion_engine::prelude::*;
 use chrono::{NaiveDate, NaiveTime};
 
 fn main() {
@@ -15,7 +15,7 @@ fn main() {
 
     let dob_date = NaiveDate::from_ymd_opt(2001, 4, 28).unwrap();
     let dob_time = NaiveTime::from_hms_opt(10, 30, 0).unwrap();
-    let location = Location::KATHMANDU; // can be customized
+    let location = Location::kathmandu(); // can be customized
 
     println!("Date of Birth: {} {}", dob_date, dob_time);
     println!(

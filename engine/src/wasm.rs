@@ -2,7 +2,7 @@ use crate::core_api::CalendarEngine;
 use crate::domain::tithi::Location;
 use crate::domain::Language;
 use crate::prelude::*;
-use chrono::{DateTime, NaiveDate, Utc};
+use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use std::sync::OnceLock;
 use wasm_bindgen::prelude::*;
@@ -45,34 +45,10 @@ impl MonthCalendar {
     }
 }
 
-struct WasmTimeProvider;
-impl crate::ports::TimeProvider for WasmTimeProvider {
-    fn now_utc(&self) -> DateTime<Utc> {
-        Utc::now()
-    }
-    fn sunrise_time(
-        &self,
-        _date: NaiveDate,
-        _location: Location,
-    ) -> crate::error::Result<chrono::NaiveTime> {
-        Ok(chrono::NaiveTime::from_hms_opt(6, 0, 0).unwrap())
-    }
-    fn sunset_time(
-        &self,
-        _date: NaiveDate,
-        _location: Location,
-    ) -> crate::error::Result<chrono::NaiveTime> {
-        Ok(chrono::NaiveTime::from_hms_opt(18, 0, 0).unwrap())
-    }
-}
-
 static ENGINE: OnceLock<CalendarEngine> = OnceLock::new();
 
 fn get_engine() -> &'static CalendarEngine {
-    ENGINE.get_or_init(|| {
-        let time_provider = std::sync::Arc::new(WasmTimeProvider);
-        CalendarEngine::with_time_provider(time_provider)
-    })
+    ENGINE.get_or_init(CalendarEngine::new)
 }
 
 #[wasm_bindgen]
@@ -84,7 +60,7 @@ pub fn get_month_calendar_with_location(
     let engine = get_engine();
 
     let calendar_data = engine
-        .get_month_calendar(year, month, *location)
+        .get_month_calendar(year, month, location.clone())
         .map_err(|e| JsValue::from_str(&e.to_string()))?;
 
     // Convert CalendarDay to WasmCalendarDay
@@ -185,7 +161,7 @@ pub fn get_sunrise_with_location(
     let gregorian = NaiveDate::from_ymd_opt(year, month, day)
         .ok_or_else(|| JsValue::from_str("Invalid Gregorian Date"))?;
     let sunrise = engine
-        .get_sunrise(gregorian, *location)
+        .get_sunrise(gregorian, location.clone())
         .map_err(|e| JsValue::from_str(&e.to_string()))?;
     Ok(sunrise.format("%H:%M:%S").to_string())
 }
@@ -201,7 +177,7 @@ pub fn get_sunset_with_location(
     let gregorian = NaiveDate::from_ymd_opt(year, month, day)
         .ok_or_else(|| JsValue::from_str("Invalid Gregorian Date"))?;
     let sunset = engine
-        .get_sunset(gregorian, *location)
+        .get_sunset(gregorian, location.clone())
         .map_err(|e| JsValue::from_str(&e.to_string()))?;
     Ok(sunset.format("%H:%M:%S").to_string())
 }
@@ -218,14 +194,14 @@ pub fn get_daily_astro_info_with_location(
         .ok_or_else(|| JsValue::from_str("Invalid Gregorian Date"))?;
 
     let info = engine
-        .get_daily_astro_info(gregorian, *location)
+        .get_daily_astro_info(gregorian, location.clone())
         .map_err(|e| JsValue::from_str(&e.to_string()))?;
 
     let sunrise = engine
-        .get_sunrise(gregorian, *location)
+        .get_sunrise(gregorian, location.clone())
         .map_err(|e| JsValue::from_str(&e.to_string()))?;
     let sunset = engine
-        .get_sunset(gregorian, *location)
+        .get_sunset(gregorian, location.clone())
         .map_err(|e| JsValue::from_str(&e.to_string()))?;
 
     Ok(WasmDailyAstroInfo {
@@ -262,7 +238,7 @@ pub fn get_month_events(
         .map_err(|e| JsValue::from_str(&e.to_string()))?;
 
     let instances = engine
-        .generate_event_instances(events, start_date, end_date, *location)
+        .generate_event_instances(events, start_date, end_date, location.clone())
         .map_err(|e| JsValue::from_str(&e.to_string()))?;
 
     let arr = js_sys::Array::new();

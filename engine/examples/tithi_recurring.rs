@@ -1,5 +1,5 @@
-use bs_calendar_core::adapters::StaticTithiOverrideProvider;
-use bs_calendar_core::prelude::*;
+use yorion_engine::adapters::StaticTithiOverrideProvider;
+use yorion_engine::prelude::*;
 use std::sync::Arc;
 
 fn main() {
@@ -79,7 +79,7 @@ fn print_instances(
         // Get details for valid output verification
         let ad_date = conversion.bs_to_gregorian(*bs_date).unwrap();
         let tithi = astro
-            .calculate_tithi_for_date(ad_date, Location::KATHMANDU)
+            .calculate_tithi_for_date(ad_date, &Location::kathmandu())
             .unwrap();
         println!("  {}. {} - {:?}", i + 1, bs_date, tithi);
     }

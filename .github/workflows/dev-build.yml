@@ -242,7 +242,7 @@ jobs:
         with:
           name: macos-artifacts-dev
           path: |
-            dist/BsCalendarCore.xcframework
+            dist/YorionCore.xcframework
             dist/swift/bs_calendar_core.swift
 
   create-dev-release:

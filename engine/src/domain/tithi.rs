@@ -338,6 +338,24 @@ impl Tithi {
             "KRISHNA TRAYODASHI" | "KRISHNATRAYODASHI" => Some(Tithi::KrishnaTrayodashi),
             "KRISHNA CHATURDASHI" | "KRISHNACHATURDASHI" => Some(Tithi::KrishnaChaturdashi),
 
+            // Bare day-names (no paksha prefix). The UI emits these alongside a
+            // separate X-PAKSHA filter, so the paksha is applied during instance
+            // generation, not encoded in the enum value. Default to the Shukla
+            // variant for a concrete enum, matching the bare "EKADASHI" convention.
+            "PRATIPADA" => Some(Tithi::ShuklaPratipada),
+            "DWITIYA" | "DVITIYA" => Some(Tithi::ShuklaDwitiya),
+            "TRITIYA" => Some(Tithi::ShuklaTritiya),
+            "CHATURTHI" => Some(Tithi::ShuklaChaturthi),
+            "PANCHAMI" => Some(Tithi::ShuklaPanchami),
+            "SHASHTI" | "SHASHTHI" => Some(Tithi::ShuklaShashti),
+            "SAPTAMI" => Some(Tithi::ShuklaSaptami),
+            "ASHTAMI" => Some(Tithi::ShuklaAshtami),
+            "NAVAMI" => Some(Tithi::ShuklaNavami),
+            "DASHAMI" => Some(Tithi::ShuklaDashami),
+            "DWADASHI" => Some(Tithi::ShuklaDwadashi),
+            "TRAYODASHI" => Some(Tithi::ShuklaTrayodashi),
+            "CHATURDASHI" => Some(Tithi::ShuklaChaturdashi),
+
             _ => None,
         }
     }
@@ -353,12 +371,11 @@ impl fmt::Display for Tithi {
     feature = "wasm",
     wasm_bindgen::prelude::wasm_bindgen(getter_with_clone)
 )]
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Location {
     pub latitude: f64,
     pub longitude: f64,
-    #[cfg_attr(feature = "wasm", wasm_bindgen(skip))]
-    pub name: &'static str,
+    pub name: String,
     pub timezone_offset_mins: i32,
     pub follow_nepal_social_calendar: bool,
 }
@@ -373,85 +390,79 @@ impl Location {
         name: String,
         timezone_offset_mins: i32,
     ) -> Self {
+        let tz = timezone_offset_mins.clamp(-(14 * 60), 14 * 60);
         Location {
             latitude,
             longitude,
-            name: Box::leak(name.into_boxed_str()), // Safe enough for this app
-            timezone_offset_mins,
+            name,
+            timezone_offset_mins: tz,
             follow_nepal_social_calendar: false,
         }
     }
 
     #[wasm_bindgen(getter)]
     pub fn name(&self) -> String {
-        self.name.to_string()
+        self.name.clone()
     }
 }
 
 impl Location {
-    /// Kathmandu, Nepal (default location)
-    pub const KATHMANDU: Location = Location {
-        latitude: 27.7172,
-        longitude: 85.3240,
-        name: "Kathmandu",
-        timezone_offset_mins: 345, // +5:45
-        follow_nepal_social_calendar: true,
-    };
+    /// Kathmandu, Nepal — official Nepali social calendar, UTC+5:45
+    pub fn kathmandu() -> Self {
+        Location {
+            latitude: 27.7172,
+            longitude: 85.3240,
+            name: "Kathmandu".to_string(),
+            timezone_offset_mins: 345,
+            follow_nepal_social_calendar: true,
+        }
+    }
 
-    /// New York, USA
-    pub const NEW_YORK: Location = Location {
-        latitude: 40.7128,
-        longitude: -74.0060,
-        name: "New York",
-        timezone_offset_mins: -300, // -5:00 (EST)
-        follow_nepal_social_calendar: false,
-    };
+    /// New York, USA — UTC-5:00 (EST)
+    pub fn new_york() -> Self {
+        Location {
+            latitude: 40.7128,
+            longitude: -74.0060,
+            name: "New York".to_string(),
+            timezone_offset_mins: -300,
+            follow_nepal_social_calendar: false,
+        }
+    }
 
-    /// London, UK
-    pub const LONDON: Location = Location {
-        latitude: 51.5074,
-        longitude: -0.1278,
-        name: "London",
-        timezone_offset_mins: 0, // GMT
-        follow_nepal_social_calendar: false,
-    };
+    /// London, UK — UTC+0
+    pub fn london() -> Self {
+        Location {
+            latitude: 51.5074,
+            longitude: -0.1278,
+            name: "London".to_string(),
+            timezone_offset_mins: 0,
+            follow_nepal_social_calendar: false,
+        }
+    }
 
-    /// Create a new location
+    /// Create a custom location. `follow_nepal_social_calendar` defaults to `false`.
+    ///
+    /// `timezone_offset_mins` is clamped to `±840` (±14 hours) to prevent
+    /// panics in `FixedOffset::east_opt` at call sites.
     pub fn new(
         latitude: f64,
         longitude: f64,
-        name: &'static str,
+        name: impl Into<String>,
         timezone_offset_mins: i32,
     ) -> Self {
         Location {
             latitude,
             longitude,
-            name,
-            timezone_offset_mins,
-            follow_nepal_social_calendar: false, // Default to false for custom locations
+            name: name.into(),
+            timezone_offset_mins: timezone_offset_mins.clamp(-(14 * 60), 14 * 60),
+            follow_nepal_social_calendar: false,
         }
     }
 
-    /// Create a new location with explicit social calendar preference
-    pub fn with_social_calendar(
-        latitude: f64,
-        longitude: f64,
-        name: &'static str,
-        timezone_offset_mins: i32,
-        follow_nepal: bool,
-    ) -> Self {
-        Location {
-            latitude,
-            longitude,
-            name,
-            timezone_offset_mins,
-            follow_nepal_social_calendar: follow_nepal,
-        }
-    }
 }
 
 impl Default for Location {
     fn default() -> Self {
-        Self::KATHMANDU
+        Self::kathmandu()
     }
 }

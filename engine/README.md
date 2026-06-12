@@ -47,7 +47,7 @@ High-level business logic that coordinates usage of the domain and ports.
 To convert dates, you use the `ConversionService`.
 
 ```rust
-use bs_calendar_core::prelude::*;
+use yorion_engine::prelude::*;
 use std::sync::Arc;
 
 fn main() -> Result<()> {

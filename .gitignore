@@ -2,8 +2,15 @@
 .secrets
 .actrc
 
+# macOS metadata
+.DS_Store
+**/.DS_Store
+
 # Act artifacts
 .act/
 dist/
 dist
 target/
+
+# Node modules (defense-in-depth — inner .gitignore also covers this)
+node_modules/

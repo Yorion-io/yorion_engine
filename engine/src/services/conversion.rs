@@ -131,23 +131,6 @@ impl ConversionService {
             })
     }
 
-    /// Validate a BS date against calendar data
-    pub fn validate_bs_date(&self, bs_date: BsDate) -> Result<()> {
-        if !self.calendar.has_year(bs_date.year) {
-            return Err(BsCalendarError::CalendarDataNotFound(bs_date.year));
-        }
-
-        let actual_days = self.calendar.get_month_days(bs_date.year, bs_date.month)?;
-        if bs_date.day > actual_days || bs_date.day < 1 {
-            return Err(BsCalendarError::InvalidDay(
-                bs_date.day,
-                bs_date.month.to_u8(),
-            ));
-        }
-
-        Ok(())
-    }
-
     /// Clamp a BS date to valid range (useful for recurrence rules)
     /// Example: 2080 Chaitra 32 → 2080 Chaitra 30 (if Chaitra has 30 days)
     pub fn clamp_bs_date(&self, year: u16, month: BsMonth, day: u8) -> Result<BsDate> {

@@ -291,7 +291,7 @@ jobs:
         with:
           name: apple-assets
           path: |
-            dist/BsCalendarCore.xcframework
+            dist/YorionCore.xcframework
             dist/swift/bs_calendar_core.swift
 
   create-release:

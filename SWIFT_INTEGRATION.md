@@ -12,7 +12,7 @@ Add to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/yourusername/BsCalendarCore", from: "0.1.0")
+    .package(url: "https://github.com/Yorion-io/yorion_engine", from: "0.1.0")
 ]
 ```
 
@@ -25,15 +25,15 @@ Or in Xcode:
 ### Option 2: Local XCFramework
 
 1. Download the latest release from GitHub Releases
-2. Extract `BsCalendarCore.xcframework.zip`
-3. Drag `BsCalendarCore.xcframework` into your Xcode project
+2. Extract `YorionCore.xcframework.zip`
+3. Drag `YorionCore.xcframework` into your Xcode project
 4. Ensure it's added to "Frameworks, Libraries, and Embedded Content"
 
 ### Option 3: Build from Source
 
 ```bash
-git clone https://github.com/yourusername/BsCalendarCore
-cd BsCalendarCore/00_core
+git clone https://github.com/Yorion-io/yorion_engine
+cd YorionCore/00_core
 
 # Build universal binary
 ./scripts/build-macos.sh
@@ -41,7 +41,7 @@ cd BsCalendarCore/00_core
 # Generate Swift bindings and XCFramework
 ./scripts/generate-swift-bindings.sh
 
-# The XCFramework is now at dist/BsCalendarCore.xcframework
+# The XCFramework is now at dist/YorionCore.xcframework
 ```
 
 ## Usage
@@ -49,7 +49,7 @@ cd BsCalendarCore/00_core
 ### Basic Date Conversion
 
 ```swift
-import BsCalendarCore
+import YorionCore
 
 // Create the calendar engine
 let engine = createEngine()
@@ -103,7 +103,7 @@ if let sunset = try? engine.getSunset(date: date, location: location) {
 
 ```swift
 import SwiftUI
-import BsCalendarCore
+import YorionCore
 
 struct CalendarView: View {
     @State private var bsDate: BsDate?
@@ -260,7 +260,7 @@ All conversion and calculation methods can throw errors. Always use `try?` or `d
 do {
     let bsDate = try engine.gregorianToBs(date: gregorianDate)
     print("Success: \\(bsDate)")
-} catch let error as BsCalendarError {
+} catch let error as YorionError {
     switch error {
     case .invalidDate(let msg):
         print("Invalid date: \\(msg)")

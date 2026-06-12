@@ -15,9 +15,9 @@
 
 ## Output Locations
 
-- **Universal Binary**: `target/universal-apple-darwin/release/libbs_calendar_core.a`
-- **Swift Bindings**: `dist/swift/bs_calendar_core.swift`
-- **XCFramework**: `dist/BsCalendarCore.xcframework/`
+- **Universal Binary**: `target/universal-apple-darwin/release/libyorion_engine.a`
+- **Swift Bindings**: `dist/swift/yorion_engine.swift`
+- **XCFramework**: `dist/YorionCore.xcframework/`
 - **WASM**: `dist/wasm/`
 
 ## Swift Integration
@@ -30,13 +30,13 @@
    - Select version
 
 2. **Via Local XCFramework**:
-   - Drag `dist/BsCalendarCore.xcframework` into project
+   - Drag `dist/YorionCore.xcframework` into project
    - Add to "Frameworks, Libraries, and Embedded Content"
 
 ### Basic Usage
 
 ```swift
-import BsCalendarCore
+import YorionCore
 
 let engine = createEngine()
 
@@ -60,7 +60,7 @@ let astroInfo = try? engine.getDailyAstroInfo(date: gregorian, location: locatio
                ▼
 ┌─────────────────────────────────────┐
 │   Swift Bindings (Auto-generated)   │
-│   bs_calendar_core.swift             │
+│   yorion_engine.swift             │
 └──────────────┬──────────────────────┘
                │
                ▼
@@ -72,7 +72,7 @@ let astroInfo = try? engine.getDailyAstroInfo(date: gregorian, location: locatio
                ▼
 ┌─────────────────────────────────────┐
 │   Rust Core Library                 │
-│   bs_calendar_core                   │
+│   yorion_engine                   │
 │   (Universal Binary: x86_64 + arm64) │
 └─────────────────────────────────────┘
 ```
@@ -103,10 +103,10 @@ build-macos:
     - run: ./scripts/generate-swift-bindings.sh
     - run: |
         cd dist
-        zip -r BsCalendarCore.xcframework.zip BsCalendarCore.xcframework
+        zip -r YorionCore.xcframework.zip YorionCore.xcframework
     - uses: softprops/action-gh-release@v1
       with:
-        files: dist/BsCalendarCore.xcframework.zip
+        files: dist/YorionCore.xcframework.zip
 ```
 
 ## Troubleshooting

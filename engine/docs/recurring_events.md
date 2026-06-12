@@ -1,12 +1,12 @@
 # Recurring Event Generation Guide
 
-This guide provides a comprehensive overview of how `BsCalendarCore` handles recurring events using RRULE (RFC 5545) format with custom extensions for Bikram Sambat calendar and Tithi support.
+This guide provides a comprehensive overview of how `YorionCore` handles recurring events using RRULE (RFC 5545) format with custom extensions for Bikram Sambat calendar and Tithi support.
 
 ---
 
 ## RRULE Format Overview
 
-All recurrence rules in BsCalendarCore use the RRULE (Recurrence Rule) format from RFC 5545, with custom extensions for BS calendar and Tithi support.
+All recurrence rules in YorionCore use the RRULE (Recurrence Rule) format from RFC 5545, with custom extensions for BS calendar and Tithi support.
 
 ### Standard RRULE Parameters
 
@@ -20,11 +20,13 @@ All recurrence rules in BsCalendarCore use the RRULE (Recurrence Rule) format fr
 
 ### Custom BS Extensions
 
-- `X-CALENDAR=BS` - Indicates BS calendar mode
-- `X-TITHI=<name>` - Tithi name for lunar recurrence
+- `X-CALENDAR=AD|BS|PANCHANGA` - Calendar-family discriminator (BS-RRULE v2.0). `BS` selects the solar family, `PANCHANGA` the lunar/tithi family, `AD`/absent the Gregorian family. Emitted **first** in canonical order.
+- `X-TITHI=<name>` - Tithi name(s) for lunar recurrence (required within the PANCHANGA family)
 - `X-PAKSHA=SHUKLA|KRISHNA` - Paksha (lunar fortnight) filter
 - `X-BYLUNARMONTH=<months>` - Lunar month filter
 - `X-SKIPADHIK=TRUE|FALSE` - Skip adhik (extra) months
+
+> Legacy v1.0 lunar rules (`X-TITHI` with `X-CALENDAR=BS` or no `X-CALENDAR`) are still accepted and resolve to the PANCHANGA family. Producers emit `X-CALENDAR=PANCHANGA`.
 
 ---
 
@@ -36,7 +38,7 @@ Solar recurrence operates on fixed dates within the Bikram Sambat calendar. Idea
 
 #### Daily Recurrence
 ```
-FREQ=DAILY;DTSTART=20800101;COUNT=30;X-CALENDAR=BS
+X-CALENDAR=BS;FREQ=DAILY;DTSTART=20800101;COUNT=30
 ```
 Every day starting from BS 2080/01/01 for 30 occurrences.
 
@@ -49,7 +51,7 @@ let rule = BsRecurrenceRule::new(
 
 #### Weekly Recurrence
 ```
-FREQ=WEEKLY;DTSTART=20800101;INTERVAL=2;X-CALENDAR=BS
+X-CALENDAR=BS;FREQ=WEEKLY;DTSTART=20800101;INTERVAL=2
 ```
 Every 2 weeks starting from BS 2080/01/01.
 
@@ -62,7 +64,7 @@ let rule = BsRecurrenceRule::new(
 
 #### Monthly Recurrence
 ```
-FREQ=MONTHLY;DTSTART=20800115;UNTIL=20810115;X-CALENDAR=BS
+X-CALENDAR=BS;FREQ=MONTHLY;DTSTART=20800115;UNTIL=20810115
 ```
 Every month on the 15th, from BS 2080/01/15 until BS 2081/01/15.
 
@@ -75,7 +77,7 @@ let rule = BsRecurrenceRule::new(
 
 #### Yearly Recurrence
 ```
-FREQ=YEARLY;DTSTART=20800101;X-CALENDAR=BS
+X-CALENDAR=BS;FREQ=YEARLY;DTSTART=20800101
 ```
 Every year on Baisakh 1 (Nepali New Year).
 
@@ -90,7 +92,7 @@ let rule = BsRecurrenceRule::new(
 
 #### Specific Months
 ```
-FREQ=MONTHLY;DTSTART=20800101;BYMONTH=1,5,9;BYMONTHDAY=1,15;X-CALENDAR=BS
+X-CALENDAR=BS;FREQ=MONTHLY;DTSTART=20800101;BYMONTH=1,5,9;BYMONTHDAY=1,15
 ```
 On the 1st and 15th of Baisakh (1), Shrawan (5), and Kartik (9).
 
@@ -105,7 +107,7 @@ let rule = BsRecurrenceRule::new(
 
 #### Quarterly Events
 ```
-FREQ=MONTHLY;DTSTART=20800101;INTERVAL=3;BYMONTHDAY=1;X-CALENDAR=BS
+X-CALENDAR=BS;FREQ=MONTHLY;DTSTART=20800101;INTERVAL=3;BYMONTHDAY=1
 ```
 Every 3 months on the 1st day.
 
@@ -120,7 +122,7 @@ let rule = BsRecurrenceRule::new(
 
 #### Last Day of Month
 ```
-FREQ=MONTHLY;DTSTART=20800132;X-CALENDAR=BS
+X-CALENDAR=BS;FREQ=MONTHLY;DTSTART=20800132
 ```
 Last day of every month (day 32 gets clamped to actual month length).
 
@@ -192,7 +194,7 @@ In the Hindu/Nepali calendar, a day's Tithi is determined by whatever Tithi is a
 
 #### Every Ekadashi (Both Pakshas)
 ```
-FREQ=MONTHLY;DTSTART=20800101;X-TITHI=EKADASHI;X-SKIPADHIK=TRUE;X-CALENDAR=BS
+X-CALENDAR=PANCHANGA;FREQ=MONTHLY;DTSTART=20800101;X-TITHI=EKADASHI;X-SKIPADHIK=TRUE
 ```
 Every Ekadashi (11th lunar day) in both Shukla and Krishna Paksha.
 
@@ -204,7 +206,7 @@ let rule = TithiRecurrenceRule::ekadashi(
 
 #### Shukla Ekadashi Only
 ```
-FREQ=MONTHLY;DTSTART=20800101;X-TITHI=SHUKLA EKADASHI;X-PAKSHA=SHUKLA;X-SKIPADHIK=TRUE;X-CALENDAR=BS
+X-CALENDAR=PANCHANGA;FREQ=MONTHLY;DTSTART=20800101;X-TITHI=SHUKLA EKADASHI;X-PAKSHA=SHUKLA;X-SKIPADHIK=TRUE
 ```
 Only Shukla Paksha Ekadashi (waxing moon).
 
@@ -218,7 +220,7 @@ let rule = TithiRecurrenceRule::with_paksha(
 
 #### Every Purnima (Full Moon)
 ```
-FREQ=MONTHLY;DTSTART=20800101;X-TITHI=PURNIMA;X-SKIPADHIK=TRUE;X-CALENDAR=BS
+X-CALENDAR=PANCHANGA;FREQ=MONTHLY;DTSTART=20800101;X-TITHI=PURNIMA;X-SKIPADHIK=TRUE
 ```
 Every full moon.
 
@@ -230,7 +232,7 @@ let rule = TithiRecurrenceRule::purnima(
 
 #### Every Amavasya (New Moon)
 ```
-FREQ=MONTHLY;DTSTART=20800101;X-TITHI=AMAVASYA;X-SKIPADHIK=TRUE;X-CALENDAR=BS
+X-CALENDAR=PANCHANGA;FREQ=MONTHLY;DTSTART=20800101;X-TITHI=AMAVASYA;X-SKIPADHIK=TRUE
 ```
 Every new moon.
 
@@ -244,7 +246,7 @@ let rule = TithiRecurrenceRule::amavasya(
 
 #### Dashain (Specific Lunar Month)
 ```
-FREQ=MONTHLY;DTSTART=20800101;X-TITHI=SHUKLA DASHAMI;X-PAKSHA=SHUKLA;X-BYLUNARMONTH=6;X-SKIPADHIK=TRUE;X-CALENDAR=BS
+X-CALENDAR=PANCHANGA;FREQ=MONTHLY;DTSTART=20800101;X-TITHI=SHUKLA DASHAMI;X-PAKSHA=SHUKLA;X-BYLUNARMONTH=6;X-SKIPADHIK=TRUE
 ```
 Shukla Dashami in Ashwin lunar month only (Dashain).
 
@@ -260,7 +262,7 @@ let rule = TithiRecurrenceRule::with_paksha(
 
 #### Ekadashi in Specific Solar Months
 ```
-FREQ=MONTHLY;DTSTART=20800101;X-TITHI=EKADASHI;BYMONTH=10,11,12;X-SKIPADHIK=TRUE;X-CALENDAR=BS
+X-CALENDAR=PANCHANGA;FREQ=MONTHLY;DTSTART=20800101;X-TITHI=EKADASHI;BYMONTH=10,11,12;X-SKIPADHIK=TRUE
 ```
 Every Ekadashi occurring in Magh, Falgun, or Chaitra solar months.
 
@@ -273,7 +275,7 @@ let rule = TithiRecurrenceRule::ekadashi(
 
 #### Limited Occurrences
 ```
-FREQ=MONTHLY;DTSTART=20800101;X-TITHI=PURNIMA;COUNT=12;X-SKIPADHIK=TRUE;X-CALENDAR=BS
+X-CALENDAR=PANCHANGA;FREQ=MONTHLY;DTSTART=20800101;X-TITHI=PURNIMA;COUNT=12;X-SKIPADHIK=TRUE
 ```
 Next 12 Purnimas only.
 
@@ -285,7 +287,7 @@ let rule = TithiRecurrenceRule::purnima(
 
 #### Krishna Ashtami (Janmashtami)
 ```
-FREQ=MONTHLY;DTSTART=20800101;X-TITHI=KRISHNA ASHTAMI;X-PAKSHA=KRISHNA;X-BYLUNARMONTH=4;X-SKIPADHIK=TRUE;X-CALENDAR=BS
+X-CALENDAR=PANCHANGA;FREQ=MONTHLY;DTSTART=20800101;X-TITHI=KRISHNA ASHTAMI;X-PAKSHA=KRISHNA;X-BYLUNARMONTH=4;X-SKIPADHIK=TRUE
 ```
 Krishna Ashtami in Shrawan lunar month (Janmashtami).
 
@@ -327,7 +329,7 @@ let rule = BsRecurrenceRule::new(
 
 // Serialize to JSON (stores as RRULE string)
 let json = serde_json::to_string(&rule).unwrap();
-// Output: "FREQ=MONTHLY;DTSTART=20800115;COUNT=12;X-CALENDAR=BS"
+// Output: "X-CALENDAR=BS;FREQ=MONTHLY;DTSTART=20800115;COUNT=12"
 
 // Deserialize from JSON
 let parsed: BsRecurrenceRule = serde_json::from_str(&json).unwrap();
@@ -338,7 +340,7 @@ assert_eq!(parsed, rule);
 
 ```rust
 // Parse from RRULE string
-let rrule = "FREQ=MONTHLY;DTSTART=20800101;X-TITHI=EKADASHI;X-CALENDAR=BS";
+let rrule = "X-CALENDAR=PANCHANGA;FREQ=MONTHLY;DTSTART=20800101;X-TITHI=EKADASHI";
 let rule = TithiRecurrenceRule::from_rrule(rrule).unwrap();
 
 // Convert to RRULE string
@@ -367,13 +369,13 @@ let loc = Location::with_social_calendar(40.7, -74.0, "NY", -300, true);
 ### Generating Instances
 
 ```rust
-use bs_calendar_core::services::InstanceGenerator;
+use yorion_engine::services::InstanceGenerator;
 
 let generator = InstanceGenerator::new(conversion_service);
 
 // BS recurrence
 let bs_rule = BsRecurrenceRule::from_rrule(
-    "FREQ=MONTHLY;DTSTART=20800101;BYMONTHDAY=1;X-CALENDAR=BS"
+    "X-CALENDAR=BS;FREQ=MONTHLY;DTSTART=20800101;BYMONTHDAY=1"
 ).unwrap();
 
 let instances = generator.generate_bs_instances(
@@ -384,7 +386,7 @@ let instances = generator.generate_bs_instances(
 
 // Tithi recurrence
 let tithi_rule = TithiRecurrenceRule::from_rrule(
-    "FREQ=MONTHLY;DTSTART=20800101;X-TITHI=EKADASHI;X-CALENDAR=BS"
+    "X-CALENDAR=PANCHANGA;FREQ=MONTHLY;DTSTART=20800101;X-TITHI=EKADASHI"
 ).unwrap();
 
 let instances = generator.generate_tithi_instances(
@@ -401,7 +403,7 @@ let instances = generator.generate_tithi_instances(
 
 ### Birthday (Annual)
 ```
-FREQ=YEARLY;DTSTART=19900515;X-CALENDAR=BS
+X-CALENDAR=BS;FREQ=YEARLY;DTSTART=19900515
 ```
 Every year on Jestha 15 (birthday).
 
@@ -425,19 +427,19 @@ FREQ=MONTHLY;DTSTART=20240101;INTERVAL=3;BYMONTHDAY=15
 
 ### Ekadashi Fasting
 ```
-FREQ=MONTHLY;DTSTART=20800101;X-TITHI=EKADASHI;X-SKIPADHIK=TRUE;X-CALENDAR=BS
+X-CALENDAR=PANCHANGA;FREQ=MONTHLY;DTSTART=20800101;X-TITHI=EKADASHI;X-SKIPADHIK=TRUE
 ```
 Every Ekadashi (both pakshas).
 
 ### Teej Festival
 ```
-FREQ=MONTHLY;DTSTART=20800101;X-TITHI=KRISHNA TRITIYA;X-PAKSHA=KRISHNA;X-BYLUNARMONTH=5;X-SKIPADHIK=TRUE;X-CALENDAR=BS
+X-CALENDAR=PANCHANGA;FREQ=MONTHLY;DTSTART=20800101;X-TITHI=KRISHNA TRITIYA;X-PAKSHA=KRISHNA;X-BYLUNARMONTH=5;X-SKIPADHIK=TRUE
 ```
 Krishna Tritiya in Bhadra lunar month.
 
 ### Tihar (Laxmi Puja)
 ```
-FREQ=MONTHLY;DTSTART=20800101;X-TITHI=AMAVASYA;X-BYLUNARMONTH=7;X-SKIPADHIK=TRUE;X-CALENDAR=BS
+X-CALENDAR=PANCHANGA;FREQ=MONTHLY;DTSTART=20800101;X-TITHI=AMAVASYA;X-BYLUNARMONTH=7;X-SKIPADHIK=TRUE
 ```
 Amavasya in Kartik lunar month.
 
@@ -465,8 +467,8 @@ Generating instances over long ranges (e.g., 50 years) is computationally expens
 | `UNTIL` | Optional | End date | `20810101` |
 | `BYMONTH` | Optional | Solar months (1-12) | `1,5,9` |
 | `BYMONTHDAY` | Optional | Days of month (1-32) | `1,15` |
-| `X-CALENDAR` | Optional | Calendar type | `BS` |
-| `X-TITHI` | Optional | Tithi name | `EKADASHI`, `PURNIMA` |
+| `X-CALENDAR` | Optional | Calendar family (discriminator) | `AD`, `BS`, `PANCHANGA` |
+| `X-TITHI` | Optional | Tithi name (required in PANCHANGA family) | `EKADASHI`, `PURNIMA` |
 | `X-PAKSHA` | Optional | Paksha filter | `SHUKLA`, `KRISHNA` |
 | `X-BYLUNARMONTH` | Optional | Lunar months (1-12) | `6` (Ashwin) |
 | `X-SKIPADHIK` | Optional | Skip adhik months | `TRUE`, `FALSE` |

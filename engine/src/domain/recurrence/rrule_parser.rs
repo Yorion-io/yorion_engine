@@ -3,7 +3,7 @@ use crate::domain::recurrence::{
     AdRecurrenceRule, BsFrequency, BsRecurrenceRule, Recurrence, TithiRecurrenceRule,
 };
 use crate::domain::tithi::{Paksha, Tithi};
-use crate::error::{BsCalendarError, Result};
+use crate::error::{BsCalendarError, RRuleRejectReason, Result};
 use std::collections::HashMap;
 
 /// RRULE parser for converting between RRULE strings and recurrence rule structs
@@ -30,10 +30,11 @@ impl RRuleParser {
             if let Some((key, value)) = part.split_once('=') {
                 params.insert(key.to_uppercase(), value.to_string());
             } else {
-                return Err(BsCalendarError::InvalidRRule(format!(
-                    "Invalid parameter format: {}",
-                    part
-                )));
+                // V1: any parameter lacks `=`.
+                return Err(BsCalendarError::rrule_rejected(
+                    RRuleRejectReason::V1,
+                    format!("Invalid parameter format: {}", part),
+                ));
             }
         }
 
@@ -44,21 +45,27 @@ impl RRuleParser {
     pub fn parse(rrule: &str) -> Result<Recurrence> {
         let params = Self::parse_params(rrule)?;
 
-        // Determine calendar type from RRULE
-        let is_bs = params.get("X-CALENDAR").map(|v| v == "BS").unwrap_or(false);
+        // BS-RRULE v2.0: family is selected by the single `X-CALENDAR` discriminator
+        // (PANCHANGA | BS | AD). The value is case-insensitive (spec §2.2).
+        let calendar = params
+            .get("X-CALENDAR")
+            .map(|v| v.trim().to_uppercase());
 
-        let is_tithi = params.contains_key("X-TITHI");
+        // Legacy (v1.0) fallback: a tithi rule used to be detected by the mere
+        // presence of `X-TITHI` (usually alongside `X-CALENDAR=BS`). Accept those
+        // strings so already-stored rules keep parsing as the lunar family.
+        let has_tithi = params.contains_key("X-TITHI");
 
-        // Parse into appropriate Recurrence variant
-        if is_tithi {
-            let rule = Self::parse_tithi_rrule(rrule)?;
-            Ok(Recurrence::Tithi(rule))
-        } else if is_bs {
-            let rule = Self::parse_bs_rrule(rrule)?;
-            Ok(Recurrence::Bs(rule))
-        } else {
-            let rule = Self::parse_ad_rrule(rrule)?;
-            Ok(Recurrence::Ad(rule))
+        match calendar.as_deref() {
+            Some("PANCHANGA") => Ok(Recurrence::Tithi(Self::parse_tithi_rrule(rrule)?)),
+            Some("BS") if has_tithi => {
+                // Legacy tithi string: X-CALENDAR=BS together with X-TITHI.
+                Ok(Recurrence::Tithi(Self::parse_tithi_rrule(rrule)?))
+            }
+            Some("BS") => Ok(Recurrence::Bs(Self::parse_bs_rrule(rrule)?)),
+            // No (or non-PANCHANGA) X-CALENDAR but X-TITHI present → legacy tithi.
+            _ if has_tithi => Ok(Recurrence::Tithi(Self::parse_tithi_rrule(rrule)?)),
+            _ => Ok(Recurrence::Ad(Self::parse_ad_rrule(rrule)?)),
         }
     }
 
@@ -69,46 +76,64 @@ impl RRuleParser {
             "WEEKLY" => Ok(BsFrequency::Weekly),
             "MONTHLY" => Ok(BsFrequency::Monthly),
             "YEARLY" => Ok(BsFrequency::Yearly),
-            _ => Err(BsCalendarError::InvalidRRule(format!(
-                "Invalid frequency: {}",
-                freq_str
-            ))),
+            // V3: FREQ is not one of the four defined frequencies.
+            _ => Err(BsCalendarError::rrule_rejected(
+                RRuleRejectReason::V3,
+                format!("Invalid frequency: {}", freq_str),
+            )),
         }
     }
 
-    /// Parse BS date from DTSTART format (YYYYMMDD)
+    /// Parse BS date from DTSTART/UNTIL format (YYYYMMDD).
+    ///
+    /// V5: the value must be exactly 8 digits and its month must be 1–12.
     fn parse_bs_date(date_str: &str) -> Result<BsDate> {
-        if date_str.len() != 8 {
-            return Err(BsCalendarError::InvalidRRule(format!(
-                "Invalid date format: {}",
-                date_str
-            )));
+        let v5 = |detail: &str| {
+            BsCalendarError::rrule_rejected(RRuleRejectReason::V5, detail.to_string())
+        };
+
+        if date_str.len() != 8 || !date_str.bytes().all(|b| b.is_ascii_digit()) {
+            return Err(v5(&format!("Date must be exactly 8 digits: {}", date_str)));
         }
 
         let year: u16 = date_str[0..4]
             .parse()
-            .map_err(|_| BsCalendarError::InvalidRRule("Invalid year".to_string()))?;
+            .map_err(|_| v5("Invalid year"))?;
         let month: u8 = date_str[4..6]
             .parse()
-            .map_err(|_| BsCalendarError::InvalidRRule("Invalid month".to_string()))?;
+            .map_err(|_| v5("Invalid month"))?;
         let day: u8 = date_str[6..8]
             .parse()
-            .map_err(|_| BsCalendarError::InvalidRRule("Invalid day".to_string()))?;
+            .map_err(|_| v5("Invalid day"))?;
 
-        BsDate::new(year, month, day)
+        if !(1..=12).contains(&month) {
+            return Err(v5(&format!("Month outside 1-12: {}", month)));
+        }
+
+        // Out-of-range year/day are still spec-coded as V5 (malformed date token).
+        BsDate::new(year, month, day).map_err(|_| {
+            v5(&format!("Invalid date: {:04}{:02}{:02}", year, month, day))
+        })
     }
 
-    /// Parse comma-separated list of months
+    /// Parse comma-separated list of months (BYMONTH / X-BYLUNARMONTH).
+    ///
+    /// V7: a value outside 1–12 (or non-numeric).
     fn parse_months(months_str: &str) -> Result<Vec<BsMonth>> {
         months_str
             .split(',')
             .map(|m| {
-                let month_num: u8 = m
-                    .trim()
-                    .parse()
-                    .map_err(|_| BsCalendarError::InvalidRRule("Invalid month".to_string()))?;
+                let month_num: u8 = m.trim().parse().map_err(|_| {
+                    BsCalendarError::rrule_rejected(
+                        RRuleRejectReason::V7,
+                        format!("Invalid month value: {}", m.trim()),
+                    )
+                })?;
                 BsMonth::try_from(month_num).map_err(|_| {
-                    BsCalendarError::InvalidRRule(format!("Invalid month: {}", month_num))
+                    BsCalendarError::rrule_rejected(
+                        RRuleRejectReason::V7,
+                        format!("Month outside 1-12: {}", month_num),
+                    )
                 })
             })
             .collect()
@@ -138,10 +163,11 @@ impl RRuleParser {
                 "TH" => Ok(4),
                 "FR" => Ok(5),
                 "SA" => Ok(6),
-                _ => Err(BsCalendarError::InvalidRRule(format!(
-                    "Invalid weekday: {}",
-                    d
-                ))),
+                // V8: BYDAY contains a token that is not a defined weekday code.
+                _ => Err(BsCalendarError::rrule_rejected(
+                    RRuleRejectReason::V8,
+                    format!("Invalid weekday: {}", d),
+                )),
             })
             .collect()
     }
@@ -160,10 +186,16 @@ impl RRuleParser {
         }
     }
 
-    /// Parse Tithi from string
+    /// Parse Tithi from string.
+    ///
+    /// V9: an unrecognized tithi name.
     fn parse_tithi(tithi_str: &str) -> Result<Tithi> {
-        Tithi::from_name(tithi_str)
-            .ok_or_else(|| BsCalendarError::InvalidRRule(format!("Invalid tithi: {}", tithi_str)))
+        Tithi::from_name(tithi_str).ok_or_else(|| {
+            BsCalendarError::rrule_rejected(
+                RRuleRejectReason::V9,
+                format!("Invalid tithi: {}", tithi_str),
+            )
+        })
     }
 
     /// Parse comma-separated list of Tithis
@@ -176,10 +208,61 @@ impl RRuleParser {
         match paksha_str.to_uppercase().as_str() {
             "SHUKLA" => Ok(Paksha::Shukla),
             "KRISHNA" => Ok(Paksha::Krishna),
-            _ => Err(BsCalendarError::InvalidRRule(format!(
-                "Invalid paksha: {}",
-                paksha_str
-            ))),
+            // V10: X-PAKSHA value other than SHUKLA/KRISHNA.
+            _ => Err(BsCalendarError::rrule_rejected(
+                RRuleRejectReason::V10,
+                format!("Invalid paksha: {}", paksha_str),
+            )),
+        }
+    }
+
+    /// Parse an optional positive `u16` parameter (e.g. INTERVAL).
+    ///
+    /// V6: the parameter is present but not a positive integer (zero or
+    /// non-numeric both fail).
+    fn parse_positive_u16(params: &HashMap<String, String>, key: &str) -> Result<Option<u16>> {
+        match params.get(key) {
+            None => Ok(None),
+            Some(raw) => {
+                let n: u16 = raw.trim().parse().map_err(|_| {
+                    BsCalendarError::rrule_rejected(
+                        RRuleRejectReason::V6,
+                        format!("{} must be a positive integer: {}", key, raw),
+                    )
+                })?;
+                if n == 0 {
+                    return Err(BsCalendarError::rrule_rejected(
+                        RRuleRejectReason::V6,
+                        format!("{} must be a positive integer: {}", key, raw),
+                    ));
+                }
+                Ok(Some(n))
+            }
+        }
+    }
+
+    /// Parse an optional positive `u32` parameter (e.g. COUNT).
+    ///
+    /// V6: the parameter is present but not a positive integer (zero or
+    /// non-numeric both fail).
+    fn parse_positive_u32(params: &HashMap<String, String>, key: &str) -> Result<Option<u32>> {
+        match params.get(key) {
+            None => Ok(None),
+            Some(raw) => {
+                let n: u32 = raw.trim().parse().map_err(|_| {
+                    BsCalendarError::rrule_rejected(
+                        RRuleRejectReason::V6,
+                        format!("{} must be a positive integer: {}", key, raw),
+                    )
+                })?;
+                if n == 0 {
+                    return Err(BsCalendarError::rrule_rejected(
+                        RRuleRejectReason::V6,
+                        format!("{} must be a positive integer: {}", key, raw),
+                    ));
+                }
+                Ok(Some(n))
+            }
         }
     }
 
@@ -187,30 +270,20 @@ impl RRuleParser {
     pub fn parse_bs_rrule(rrule: &str) -> Result<BsRecurrenceRule> {
         let params = Self::parse_params(rrule)?;
 
-        // Required: FREQ and DTSTART
-        let freq_str = params
-            .get("FREQ")
-            .ok_or_else(|| BsCalendarError::InvalidRRule("Missing FREQ".to_string()))?;
+        // Required: FREQ (V2) and DTSTART (V4)
+        let freq_str = params.get("FREQ").ok_or_else(|| {
+            BsCalendarError::rrule_rejected(RRuleRejectReason::V2, "Missing FREQ")
+        })?;
         let frequency = Self::parse_frequency(freq_str)?;
 
-        let dtstart_str = params
-            .get("DTSTART")
-            .ok_or_else(|| BsCalendarError::InvalidRRule("Missing DTSTART".to_string()))?;
+        let dtstart_str = params.get("DTSTART").ok_or_else(|| {
+            BsCalendarError::rrule_rejected(RRuleRejectReason::V4, "Missing DTSTART")
+        })?;
         let anchor = Self::parse_bs_date(dtstart_str)?;
 
-        // Optional parameters
-        let interval = params
-            .get("INTERVAL")
-            .map(|s| s.parse::<u16>())
-            .transpose()
-            .map_err(|_| BsCalendarError::InvalidRRule("Invalid INTERVAL".to_string()))?
-            .unwrap_or(1);
-
-        let count = params
-            .get("COUNT")
-            .map(|s| s.parse::<u32>())
-            .transpose()
-            .map_err(|_| BsCalendarError::InvalidRRule("Invalid COUNT".to_string()))?;
+        // Optional parameters. INTERVAL/COUNT must be positive integers (V6).
+        let interval = Self::parse_positive_u16(&params, "INTERVAL")?.unwrap_or(1);
+        let count = Self::parse_positive_u32(&params, "COUNT")?;
 
         let until = params
             .get("UNTIL")
@@ -246,7 +319,9 @@ impl RRuleParser {
 
     /// Convert BsRecurrenceRule to RRULE string
     pub fn bs_to_rrule(rule: &BsRecurrenceRule) -> String {
+        // Canonical order (BS-RRULE v2.0 §7): the X-CALENDAR discriminator leads.
         let mut parts = vec![
+            "X-CALENDAR=BS".to_string(),
             format!("FREQ={}", Self::frequency_to_string(&rule.frequency)),
             format!(
                 "DTSTART={:04}{:02}{:02}",
@@ -300,8 +375,6 @@ impl RRuleParser {
             parts.push(format!("BYDAY={}", days_str));
         }
 
-        parts.push("X-CALENDAR=BS".to_string());
-
         parts.join(";")
     }
 
@@ -319,15 +392,15 @@ impl RRuleParser {
     pub fn parse_tithi_rrule(rrule: &str) -> Result<TithiRecurrenceRule> {
         let params = Self::parse_params(rrule)?;
 
-        // Required: X-TITHI and DTSTART
-        let tithis_str = params
-            .get("X-TITHI")
-            .ok_or_else(|| BsCalendarError::InvalidRRule("Missing X-TITHI".to_string()))?;
+        // Required: X-TITHI (V9 — missing/empty) and DTSTART (V4).
+        let tithis_str = params.get("X-TITHI").filter(|s| !s.trim().is_empty()).ok_or_else(|| {
+            BsCalendarError::rrule_rejected(RRuleRejectReason::V9, "Missing X-TITHI")
+        })?;
         let by_tithi = Self::parse_tithis(tithis_str)?;
 
-        let dtstart_str = params
-            .get("DTSTART")
-            .ok_or_else(|| BsCalendarError::InvalidRRule("Missing DTSTART".to_string()))?;
+        let dtstart_str = params.get("DTSTART").ok_or_else(|| {
+            BsCalendarError::rrule_rejected(RRuleRejectReason::V4, "Missing DTSTART")
+        })?;
         let anchor = Self::parse_bs_date(dtstart_str)?;
 
         // Optional parameters
@@ -336,11 +409,8 @@ impl RRuleParser {
             .map(|s| Self::parse_paksha(s))
             .transpose()?;
 
-        let count = params
-            .get("COUNT")
-            .map(|s| s.parse::<u32>())
-            .transpose()
-            .map_err(|_| BsCalendarError::InvalidRRule("Invalid COUNT".to_string()))?;
+        // COUNT must be a positive integer (V6).
+        let count = Self::parse_positive_u32(&params, "COUNT")?;
 
         let until = params
             .get("UNTIL")
@@ -359,8 +429,24 @@ impl RRuleParser {
 
         let skip_adhik = params
             .get("X-SKIPADHIK")
-            .map(|s| s.to_uppercase() == "TRUE")
+            .map(|s| {
+                let v = s.trim().to_uppercase();
+                v == "TRUE" || v == "1" || v == "YES"
+            })
             .unwrap_or(true);
+
+        let take_first = if let Some(s) = params.get("X-TAKE") {
+            let v = s.trim().to_uppercase();
+            if v != "FIRST" {
+                return Err(BsCalendarError::rrule_rejected(
+                    RRuleRejectReason::V11,
+                    format!("X-TAKE must be FIRST, got: {}", s.trim()),
+                ));
+            }
+            true
+        } else {
+            false
+        };
 
         Ok(TithiRecurrenceRule {
             by_tithi,
@@ -371,6 +457,7 @@ impl RRuleParser {
             by_month,
             by_lunar_month,
             skip_adhik,
+            take_first,
         })
     }
 
@@ -383,7 +470,9 @@ impl RRuleParser {
             .collect::<Vec<_>>()
             .join(",");
 
+        // Canonical order (BS-RRULE v2.0 §7): the X-CALENDAR discriminator leads.
         let mut parts = vec![
+            "X-CALENDAR=PANCHANGA".to_string(),
             "FREQ=MONTHLY".to_string(),
             format!(
                 "DTSTART={:04}{:02}{:02}",
@@ -433,7 +522,10 @@ impl RRuleParser {
             "X-SKIPADHIK={}",
             if rule.skip_adhik { "TRUE" } else { "FALSE" }
         ));
-        parts.push("X-CALENDAR=BS".to_string());
+
+        if rule.take_first {
+            parts.push("X-TAKE=FIRST".to_string());
+        }
 
         parts.join(";")
     }
