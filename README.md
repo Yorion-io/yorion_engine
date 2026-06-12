@@ -367,160 +367,40 @@ cargo bench --bench engine_perf
 
 ---
 
-## Nepal festival rules
-
-Ready-to-use BS-RRULE strings for Nepal's major festivals (Dashain, Tihar, Shivaratri,
-Teej, Chhath, Buddha Purnima, and 15+ more) with verified Gregorian dates for
-BS 2079–2083 are documented in:
-
-**[docs/bs-rrule-spec.md](docs/bs-rrule-spec.md)**
-
-Every rule in that document is backed by the `festival_ground_truth` test suite
-(208 tests across 53 festivals × BS 2079–2083, validated against official Nepali Panchanga almanac data).
-
----
-
 ## BS-RRULE specification v2.0
 
-Standard RFC 5545 RRULE does not know about BS months, tithi, paksha, or adhik masa. This library defines **BS-RRULE**, a strict superset of RFC 5545 for the Bikram Sambat calendar system.
+Standard RFC 5545 RRULE has no concept of BS months, tithi, paksha, or adhik masa. This library defines **BS-RRULE** — a strict superset of RFC 5545 that adds a small set of `X-` extension parameters for the Bikram Sambat calendar system.
 
-The goal: any application that stores recurring event rules as strings can interoperate with this library and with future BS-calendar tools by agreeing on this format.
-
-### Family discriminator
-
-Every BS-RRULE string starts with `X-CALENDAR=<FAMILY>`.
+Every BS-RRULE string starts with `X-CALENDAR=<FAMILY>`:
 
 | Family | Meaning |
 |---|---|
 | `X-CALENDAR=BS` | Solar recurrence anchored in the BS calendar |
-| `X-CALENDAR=AD` | Standard RFC 5545 Gregorian recurrence (no extension needed) |
-| `X-CALENDAR=PANCHANGA` | Lunar recurrence anchored in tithi/paksha |
+| `X-CALENDAR=PANCHANGA` | Lunar recurrence anchored in tithi / paksha |
+| `X-CALENDAR=AD` | Standard RFC 5545 Gregorian (no extensions) |
 
-Parsers that do not understand `X-CALENDAR` should treat the string as a plain RFC 5545 rule and ignore unknown `X-*` parameters (per iCalendar spec §3.2).
-
----
-
-### Family: BS (Bikram Sambat solar)
-
-**Required parameters:**
-
-| Parameter | Format | Description |
-|---|---|---|
-| `X-CALENDAR` | `BS` | Identifies the BS family |
-| `FREQ` | `DAILY\|WEEKLY\|MONTHLY\|YEARLY` | Recurrence frequency |
-| `DTSTART` | `YYYYMMDD` (BS date) | Anchor date in BS |
-
-**Optional parameters:**
-
-| Parameter | Format | Description |
-|---|---|---|
-| `INTERVAL` | positive integer | Every N periods (default 1) |
-| `COUNT` | positive integer | Stop after N occurrences |
-| `UNTIL` | `YYYYMMDD` (BS date) | Stop on or before this BS date |
-| `BYMONTH` | comma-separated 1–12 | Restrict to these BS months |
-| `BYMONTHDAY` | comma-separated 1–32 | Restrict to these days of month |
-| `BYDAY` | `SU,MO,TU,WE,TH,FR,SA` | Restrict to these weekdays |
-
-**Canonical parameter order** (serializers MUST produce this order; parsers MUST accept any order):
+Quick examples:
 
 ```
-X-CALENDAR;FREQ;DTSTART[;INTERVAL][;COUNT][;UNTIL][;BYMONTH][;BYMONTHDAY][;BYDAY]
-```
-
-**Examples:**
-
-```
-# Baisakh 1 every year (Nepali New Year)
+# Nepali New Year — Baisakh 1 every year
 X-CALENDAR=BS;FREQ=YEARLY;DTSTART=20810101;BYMONTH=1;BYMONTHDAY=1
 
-# Every Monday in Shrawan (month 4)
-X-CALENDAR=BS;FREQ=WEEKLY;DTSTART=20810401;BYMONTH=4;BYDAY=MO
-
-# Every 2 weeks, 10 times
-X-CALENDAR=BS;FREQ=WEEKLY;DTSTART=20810101;INTERVAL=2;COUNT=10
-```
-
----
-
-### Family: PANCHANGA (lunar / tithi-based)
-
-**Required parameters:**
-
-| Parameter | Format | Description |
-|---|---|---|
-| `X-CALENDAR` | `PANCHANGA` | Identifies the lunar family |
-| `FREQ` | `MONTHLY` (always) | One lunar cycle per month |
-| `DTSTART` | `YYYYMMDD` (BS date) | Anchor date in BS |
-| `X-TITHI` | comma-separated tithi names | One or more tithis to match |
-
-**Tithi name vocabulary** (case-insensitive, upper-case canonical):
-
-Shukla Paksha: `SHUKLAPRATIPADA` through `SHUKLACHATURDASHI`, `PURNIMA`  
-Krishna Paksha: `KRISHNAPRATIPADA` through `KRISHNACHATURDASHI`, `AMAVASYA`
-
-Shorthand names accepted: `EKADASHI` (matches both pakshas unless `X-PAKSHA` is set), `PURNIMA`, `AMAVASYA`.
-
-**Optional parameters:**
-
-| Parameter | Format | Description |
-|---|---|---|
-| `X-PAKSHA` | `SHUKLA\|KRISHNA` | Restrict to one paksha |
-| `COUNT` | positive integer | Stop after N occurrences |
-| `UNTIL` | `YYYYMMDD` (BS date) | Stop on or before this BS date |
-| `BYMONTH` | comma-separated 1–12 | Restrict to these BS solar months |
-| `X-BYLUNARMONTH` | comma-separated 1–12 | Restrict to these lunar months |
-| `X-SKIPADHIK` | `TRUE\|FALSE` | Skip occurrences in adhik masa (default TRUE) |
-| `X-TAKE` | `FIRST` | Within each BS year keep only the first qualifying occurrence |
-
-**Canonical parameter order:**
-
-```
-X-CALENDAR;FREQ;DTSTART;X-TITHI[;X-PAKSHA][;COUNT][;UNTIL][;BYMONTH][;X-BYLUNARMONTH];X-SKIPADHIK[;X-TAKE]
-```
-
-**Examples:**
-
-```
-# Every Ekadashi (both pakshas), indefinitely
+# Every Ekadashi (both pakshas)
 X-CALENDAR=PANCHANGA;FREQ=MONTHLY;DTSTART=20810101;X-TITHI=EKADASHI;X-SKIPADHIK=TRUE
 
-# Every Purnima, Shukla Paksha only, 12 times
-X-CALENDAR=PANCHANGA;FREQ=MONTHLY;DTSTART=20810101;X-TITHI=PURNIMA;X-PAKSHA=SHUKLA;COUNT=12
-
-# Teej — Shukla Tritiya, Bhadra (month 5) only
-X-CALENDAR=PANCHANGA;FREQ=MONTHLY;DTSTART=20810501;X-TITHI=SHUKLA TRITIYA;X-PAKSHA=SHUKLA;BYMONTH=5;X-SKIPADHIK=TRUE
+# Teej — Shukla Tritiya in Bhadra only
+X-CALENDAR=PANCHANGA;FREQ=MONTHLY;DTSTART=20810501;X-TITHI=SHUKLATRITIYA;X-PAKSHA=SHUKLA;BYMONTH=5;X-SKIPADHIK=TRUE
 ```
+
+**[Full specification → docs/bs-rrule-spec.md](docs/bs-rrule-spec.md)**
+
+The spec is language- and platform-agnostic. Anyone can implement a conformant parser from that document alone without reading this library's source code.
 
 ---
 
-### Family: AD (Gregorian passthrough)
+## Nepal festival rules
 
-When `X-CALENDAR=AD` (or `X-CALENDAR` is absent), the string is a plain RFC 5545 RRULE and is passed unchanged to the standard `rrule` crate. No extensions apply.
-
-```
-# Standard Gregorian weekly — no BS-RRULE extensions needed
-FREQ=WEEKLY;DTSTART=20240413T000000Z;BYDAY=FR
-```
-
----
-
-### Validation error codes
-
-Implementations that validate BS-RRULE strings SHOULD use these codes in error messages for interoperability:
-
-| Code | Meaning |
-|---|---|
-| V1 | Malformed parameter (missing `=`) |
-| V2 | Missing required `FREQ` |
-| V3 | Unrecognized `FREQ` value |
-| V4 | Missing required `DTSTART` |
-| V5 | `DTSTART` or `UNTIL` is not a valid 8-digit BS date |
-| V6 | `INTERVAL` or `COUNT` is zero or non-numeric |
-| V7 | `BYMONTH` or `X-BYLUNARMONTH` value outside 1–12 |
-| V8 | `BYDAY` contains an unrecognized weekday token |
-| V9 | Missing or unrecognized `X-TITHI` value |
-| V10 | `X-PAKSHA` value is not `SHUKLA` or `KRISHNA` |
-| V11 | `X-TAKE` value is not `FIRST` |
+Ready-to-use BS-RRULE strings for Nepal's major festivals — Dashain, Tihar, Shivaratri, Teej, Chhath, Buddha Purnima, and 15+ more — with verified dates for BS 2079–2083 are in the spec document above. Every rule is backed by the `festival_ground_truth` test suite (208 tests across 53 festivals, validated against official Nepali Panchanga almanac data).
 
 ---
 
