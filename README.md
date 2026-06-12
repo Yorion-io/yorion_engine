@@ -176,21 +176,45 @@ Full TypeScript definitions (`.d.ts`) are included in every target directory.
 
 ---
 
-## Native bindings — Swift (iOS / macOS)
+## Pre-built binaries
 
-The library exposes a UniFFI interface that generates native Swift bindings.
+Every [GitHub Release](https://github.com/Yorion-io/yorion_engine/releases) ships the following artifacts:
 
-```bash
-# Build the macOS dylib + generate Swift sources
-./scripts/build-macos-arm64.sh
-./scripts/generate-swift-bindings.sh
+| Artifact | Contents | Target |
+|---|---|---|
+| `wasm-assets-{version}.tar.gz` | `web/`, `bundler/`, `nodejs/` WASM bundles + `.d.ts` | Browser, Node.js |
+| `apple-assets-{version}.tar.gz` | `BsCalendarCore.xcframework` + `yorion_engine.swift` | macOS (arm64 + x86_64) |
+
+### Installing in a Swift / Xcode project
+
+1. Download `apple-assets-{version}.tar.gz` from the [latest release](https://github.com/Yorion-io/yorion_engine/releases/latest).
+2. Extract and copy `BsCalendarCore.xcframework` into your project's `Frameworks/` folder.
+3. Copy `yorion_engine.swift` alongside it.
+4. In Xcode → target → **General → Frameworks, Libraries, and Embedded Content**: add `BsCalendarCore.xcframework` and set it to **Do Not Embed** (it is a static library).
+5. Set your bridging header to import the generated C FFI header:
+
+```c
+#import "Frameworks/BsCalendarCore.xcframework/macos-arm64_x86_64/Headers/yorion_engineFFI.h"
 ```
 
-Then add the generated `YorionEngine.swift` and the `.dylib` / `.xcframework` to your Xcode project. See [Swift Integration Guide](./docs/swift-integration.md) for a step-by-step guide.
+See [Swift Integration Guide](./docs/swift-integration.md) for full usage examples.
 
-### Kotlin / Android
+---
 
-UniFFI also targets Kotlin. The `.udl` interface file at `engine/src/uniffi.udl` is the source of truth; run `uniffi-bindgen generate` with `--language kotlin` to produce the Kotlin bindings. Android packaging instructions are in progress.
+## Planned binary targets
+
+The following targets are not yet published but the engine compiles to all of them from the same Rust source. Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+| Target | Mechanism | Status |
+|---|---|---|
+| iOS (device + simulator) | UniFFI → XCFramework (same Swift bindings, additional slices) | Planned |
+| Android / Kotlin | UniFFI → `.aar` + Kotlin bindings | Planned |
+| Linux x86_64 | `cdylib` → `libyorion_engine.so` | Planned |
+| Windows x86_64 | `cdylib` → `yorion_engine.dll` | Planned |
+| Flutter / Dart | `flutter_rust_bridge` codegen | Planned |
+| React Native | `uniffi-bindgen-react-native` | Planned |
+
+If you need one of these targets today, the engine builds cleanly for all of them — the missing piece is only the CI job and packaging script. See [CONTRIBUTING.md](CONTRIBUTING.md) if you want to add one.
 
 ---
 
@@ -336,7 +360,7 @@ Without `UNTIL` or `COUNT`, the generator walks every day in whatever window the
 Run the benchmarks yourself:
 
 ```bash
-cd engine/engine
+cd engine
 cargo bench --bench engine_perf
 # HTML report: target/criterion/report/index.html
 ```
