@@ -4,7 +4,7 @@
 
 ```bash
 git clone https://github.com/Yorion-io/yorion_engine
-cd bs-calendar-core/engine
+cd yorion_engine/engine
 cargo build
 cargo test
 ```
