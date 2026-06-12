@@ -1,6 +1,6 @@
-# Consuming BS Calendar Core
+# Consuming YorionEngine
 
-This guide shows how to integrate BS Calendar Core WASM bindings into your projects.
+This guide shows how to integrate YorionEngine WASM bindings into your projects.
 
 ## 📦 WASM Integration
 

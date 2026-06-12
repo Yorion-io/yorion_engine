@@ -120,6 +120,6 @@ build-macos:
 
 ## Documentation
 
-- **Full Guide**: [SWIFT_INTEGRATION.md](SWIFT_INTEGRATION.md)
+- **Full Guide**: [Swift Integration Guide](./swift-integration.md)
 - **Implementation Plan**: [implementation_plan.md](brain/implementation_plan.md)
-- **WASM Setup**: [SETUP.md](SETUP.md)
+- **WASM Setup**: [Setup Guide](./setup.md)

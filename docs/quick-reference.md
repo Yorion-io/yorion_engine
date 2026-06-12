@@ -118,5 +118,5 @@ rustup target add wasm32-unknown-unknown
 ## 📚 Documentation
 
 - [README.md](./README.md) - Project overview
-- [SETUP.md](./SETUP.md) - Detailed setup guide
-- [CONSUMING.md](./CONSUMING.md) - WASM integration examples
+- [Setup Guide](./setup.md) - Detailed setup guide
+- [WASM Integration](./consuming-wasm.md) - WASM integration examples

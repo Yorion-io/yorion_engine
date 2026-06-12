@@ -186,7 +186,7 @@ The library exposes a UniFFI interface that generates native Swift bindings.
 ./scripts/generate-swift-bindings.sh
 ```
 
-Then add the generated `YorionEngine.swift` and the `.dylib` / `.xcframework` to your Xcode project. See [SWIFT_INTEGRATION.md](./SWIFT_INTEGRATION.md) for a step-by-step guide.
+Then add the generated `YorionEngine.swift` and the `.dylib` / `.xcframework` to your Xcode project. See [Swift Integration Guide](./docs/swift-integration.md) for a step-by-step guide.
 
 ### Kotlin / Android
 

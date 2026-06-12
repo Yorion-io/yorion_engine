@@ -2,7 +2,7 @@
 
 ## Overview
 
-This guide shows how to integrate the BS Calendar Core Rust library into your macOS Swift/SwiftUI application using automatically generated Swift bindings via UniFFI.
+This guide shows how to integrate the YorionEngine Rust library into your macOS Swift/SwiftUI application using automatically generated Swift bindings via UniFFI.
 
 ## Installation
 
