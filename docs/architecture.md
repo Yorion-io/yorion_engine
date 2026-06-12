@@ -302,3 +302,111 @@ npm run engine:download
 ```
 
 Version is controlled via `BS_ENGINE_VERSION` env var or `package.json` scripts.
+
+---
+
+## Performance
+
+Benchmarks run with `cargo bench` on an **Apple M5, 10-core, 16 GB RAM** (native release build, `opt-level = "z"`). WASM in Node.js is typically 2–5× slower due to the JS↔WASM boundary.
+
+### Primitive operations
+
+| Operation | Time | Notes |
+|---|---|---|
+| `bs_to_gregorian` | 76 ns | Linear scan of 91-entry static array |
+| `gregorian_to_bs` | 56 ns | Same array, reverse lookup |
+| `get_tithi` (override hit) | 187 ns | Hits the 176-entry correction table; skips all astronomy |
+| `get_tithi` (override miss) | 200 ns | Falls through to VSOP87 + ELP-2000/82 |
+| `get_sunrise` | 153 ns | suncalc only; no planet positions |
+| `get_daily_astro_info` | 9.7 µs | Tithi + sun sign + moon sign + nakshatra in one pass |
+
+### Month calendar
+
+| Month | Days | Time |
+|---|---|---|
+| Shrawan (longest) | 32 | 782 µs |
+| Poush (shortest) | 29 | 756 µs |
+
+A full year render (12 months of `get_month_calendar`) costs ~9 ms.
+
+### Tithi instance generation
+
+The generator walks every BS day in the requested window and evaluates each one against the rule. `BYMONTH` skips non-matching months before doing any astronomy — a single-month filter makes it ~12× faster than unfiltered.
+
+| Rule | 1-year | 5-year | 10-year |
+|---|---|---|---|
+| Festival with `BYMONTH` (2 months) | 9 ms | 40 ms | 86 ms |
+| Festival with `BYMONTH` (1 month) | 7.8 ms | 37 ms | 68 ms |
+| Unfiltered (no `BYMONTH`) | 19 ms | 95 ms | 180 ms |
+
+### BS solar instance generation
+
+No astronomy — pure date arithmetic. ~4000× cheaper than tithi rules.
+
+| Rule | 1-year | 5-year | 10-year |
+|---|---|---|---|
+| Annual (e.g. Baisakh 1) | 944 ns | 1.5 µs | 2.3 µs |
+| Weekly (52 instances/year) | 9.6 µs | — | — |
+
+### Practical guidance
+
+| Context | Recommendation |
+|---|---|
+| Backend, one-month view, <20 events | Fine as-is |
+| Backend, 50+ events per month | Cache `(year, month, eventsHash) → instances` |
+| Desktop / native (Tauri) | No concern — costs are 2–5× lower than WASM |
+| Browser WASM, main thread | Keep window to one month; use a Web Worker for >16 ms |
+| Notification scheduler | Pre-expand to database rows on event save |
+
+```bash
+cd engine && cargo bench --bench engine_perf
+# HTML report: target/criterion/report/index.html
+```
+
+---
+
+## Extending the library
+
+### Custom calendar data provider
+
+Implement `CalendarProvider` to supply your own BS month-length table (e.g. to extend coverage beyond BS 2090):
+
+```rust
+use yorion_engine::ports::CalendarProvider;
+use yorion_engine::domain::BsMonth;
+use yorion_engine::prelude::Result;
+use chrono::NaiveDate;
+
+struct MyProvider;
+impl CalendarProvider for MyProvider {
+    fn get_month_days(&self, year: u16, month: BsMonth) -> Result<u8> { … }
+    fn get_first_baisakh(&self, year: u16) -> Result<NaiveDate> { … }
+    fn get_year_months(&self, year: u16) -> Result<[u8; 12]> { … }
+    fn has_year(&self, year: u16) -> bool { … }
+    fn version(&self) -> &str { "custom-2090-2110" }
+    fn is_official(&self) -> bool { false }
+}
+```
+
+> A `new_with_provider` constructor is not yet in the public API — contributions welcome.
+
+### Custom tithi overrides
+
+Implement `TithiOverrideProvider` to supply your own correction table:
+
+```rust
+use yorion_engine::ports::TithiOverrideProvider;
+use yorion_engine::domain::tithi::{Tithi, Location};
+use chrono::NaiveDate;
+
+struct MyOverrides;
+impl TithiOverrideProvider for MyOverrides {
+    fn get_override(&self, date: NaiveDate, location: &Location) -> Option<Tithi> {
+        None // return Some(tithi) to override astronomical calculation
+    }
+}
+```
+
+### New recurrence families
+
+Add a new variant to `Recurrence` in `src/domain/recurrence/recurrence_enum.rs`, implement a `*RecurrenceRule` struct, add serialization in `RRuleParser`, and a generator in `InstanceGenerator`. The `X-CALENDAR` discriminator in BS-RRULE v2.0 is the correct extension point.

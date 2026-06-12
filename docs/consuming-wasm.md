@@ -214,3 +214,30 @@ The WASM bindings expose the following main types:
 - `Nakshatra` - Nakshatra enum
 
 See the TypeScript definitions (`.d.ts` files) in each WASM target for complete API documentation.
+
+---
+
+## Binary size
+
+Current distribution sizes (post `wasm-opt`):
+
+| Target | `.wasm` | JS glue |
+|---|---|---|
+| web | ~3.3 MB | ~50 KB |
+| bundler | ~3.3 MB | ~46 KB |
+| nodejs | ~3.3 MB | ~48 KB |
+
+Compresses to ~1 MB over HTTP/2 with gzip. Size comes from:
+
+| Source | Contribution |
+|---|---|
+| 91 years of calendar data | ~800 KB |
+| Astronomical code (`suncalc`, `astro`) | ~1.2 MB |
+| Recurrence engine (`rrule` + BS extensions) | ~600 KB |
+| Rust std (panic, fmt, allocator) | ~700 KB |
+
+**To reduce size:**
+
+1. `wasm-opt -Oz` — build script calls this automatically if `binaryen` is installed (~10–15% saving).
+2. Feature-flag astronomical calculations — not yet implemented; estimated ~800 KB saving. PRs welcome.
+3. Narrow the calendar data range from BS 2000–2090 — not yet implemented; would require a build-time env var.
