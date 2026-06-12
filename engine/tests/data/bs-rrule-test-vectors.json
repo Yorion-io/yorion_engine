@@ -1,0 +1,183 @@
+{
+  "version": "2.0",
+  "description": "BS-RRULE v2.0 conformance test vectors. Each vector exercises one parser rule (V1–V11) or a valid parse path.",
+  "vectors": [
+    {
+      "id": 1,
+      "intent": "V1 — parameter without '=' must be rejected",
+      "input": "FREQYEARLY;X-CALENDAR=BS;DTSTART=20790101",
+      "expected": { "outcome": "reject", "rejectReason": "V1" }
+    },
+    {
+      "id": 2,
+      "intent": "V2 — BS family with no FREQ must be rejected",
+      "input": "X-CALENDAR=BS;DTSTART=20790101",
+      "expected": { "outcome": "reject", "rejectReason": "V2" }
+    },
+    {
+      "id": 3,
+      "intent": "V3 — unrecognized FREQ value must be rejected",
+      "input": "X-CALENDAR=BS;FREQ=HOURLY;DTSTART=20790101",
+      "expected": { "outcome": "reject", "rejectReason": "V3" }
+    },
+    {
+      "id": 4,
+      "intent": "V4 — BS family with no DTSTART must be rejected",
+      "input": "X-CALENDAR=BS;FREQ=YEARLY",
+      "expected": { "outcome": "reject", "rejectReason": "V4" }
+    },
+    {
+      "id": 5,
+      "intent": "V4 — PANCHANGA family with no DTSTART must be rejected",
+      "input": "X-CALENDAR=PANCHANGA;X-TITHI=EKADASHI",
+      "expected": { "outcome": "reject", "rejectReason": "V4" }
+    },
+    {
+      "id": 6,
+      "intent": "V5 — DTSTART with wrong number of digits must be rejected",
+      "input": "X-CALENDAR=BS;FREQ=YEARLY;DTSTART=207901",
+      "expected": { "outcome": "reject", "rejectReason": "V5" }
+    },
+    {
+      "id": 7,
+      "intent": "V5 — DTSTART with month 13 must be rejected",
+      "input": "X-CALENDAR=BS;FREQ=YEARLY;DTSTART=20791301",
+      "expected": { "outcome": "reject", "rejectReason": "V5" }
+    },
+    {
+      "id": 8,
+      "intent": "V6 — COUNT=0 (not a positive integer) must be rejected",
+      "input": "X-CALENDAR=BS;FREQ=YEARLY;DTSTART=20790101;COUNT=0",
+      "expected": { "outcome": "reject", "rejectReason": "V6" }
+    },
+    {
+      "id": 9,
+      "intent": "V6 — INTERVAL=0 (not a positive integer) must be rejected",
+      "input": "X-CALENDAR=BS;FREQ=YEARLY;DTSTART=20790101;INTERVAL=0",
+      "expected": { "outcome": "reject", "rejectReason": "V6" }
+    },
+    {
+      "id": 10,
+      "intent": "V7 — BYMONTH=13 (out of 1–12) must be rejected",
+      "input": "X-CALENDAR=BS;FREQ=YEARLY;DTSTART=20790101;BYMONTH=13",
+      "expected": { "outcome": "reject", "rejectReason": "V7" }
+    },
+    {
+      "id": 11,
+      "intent": "V7 — X-BYLUNARMONTH=0 (out of 1–12) must be rejected",
+      "input": "X-CALENDAR=PANCHANGA;X-TITHI=EKADASHI;DTSTART=20790101;X-BYLUNARMONTH=0",
+      "expected": { "outcome": "reject", "rejectReason": "V7" }
+    },
+    {
+      "id": 12,
+      "intent": "V8 — BYDAY with unrecognized weekday token must be rejected",
+      "input": "X-CALENDAR=BS;FREQ=WEEKLY;DTSTART=20790101;BYDAY=XX",
+      "expected": { "outcome": "reject", "rejectReason": "V8" }
+    },
+    {
+      "id": 13,
+      "intent": "V9 — PANCHANGA family with no X-TITHI must be rejected",
+      "input": "X-CALENDAR=PANCHANGA;DTSTART=20790101",
+      "expected": { "outcome": "reject", "rejectReason": "V9" }
+    },
+    {
+      "id": 14,
+      "intent": "V10 — unrecognized X-PAKSHA value must be rejected",
+      "input": "X-CALENDAR=PANCHANGA;X-TITHI=EKADASHI;DTSTART=20790101;X-PAKSHA=BOTH",
+      "expected": { "outcome": "reject", "rejectReason": "V10" }
+    },
+    {
+      "id": 15,
+      "intent": "V11 — unrecognized X-TAKE value must be rejected",
+      "input": "X-CALENDAR=PANCHANGA;X-TITHI=EKADASHI;DTSTART=20790101;X-TAKE=LAST",
+      "expected": { "outcome": "reject", "rejectReason": "V11" }
+    },
+    {
+      "id": 16,
+      "intent": "Valid BS annual rule — Nepali New Year (Baisakh 1)",
+      "input": "X-CALENDAR=BS;FREQ=YEARLY;DTSTART=20730101;BYMONTH=1;BYMONTHDAY=1",
+      "expected": {
+        "outcome": "parse",
+        "family": "BS",
+        "params": { "freq": "YEARLY", "dtstart": "20730101", "byMonthDay": [1] }
+      }
+    },
+    {
+      "id": 17,
+      "intent": "Valid BS weekly rule",
+      "input": "X-CALENDAR=BS;FREQ=WEEKLY;DTSTART=20790101;BYDAY=FR",
+      "expected": {
+        "outcome": "parse",
+        "family": "BS",
+        "params": { "freq": "WEEKLY", "dtstart": "20790101", "byDay": ["FR"] }
+      }
+    },
+    {
+      "id": 18,
+      "intent": "Valid PANCHANGA rule — Ekadashi (both pakshas)",
+      "input": "X-CALENDAR=PANCHANGA;X-TITHI=EKADASHI;DTSTART=20790101",
+      "expected": {
+        "outcome": "parse",
+        "family": "PANCHANGA",
+        "params": { "dtstart": "20790101" }
+      }
+    },
+    {
+      "id": 19,
+      "intent": "Valid PANCHANGA rule — Shukla Purnima",
+      "input": "X-CALENDAR=PANCHANGA;X-TITHI=PURNIMA;X-PAKSHA=SHUKLA;DTSTART=20790101",
+      "expected": {
+        "outcome": "parse",
+        "family": "PANCHANGA",
+        "params": { "dtstart": "20790101", "paksha": "SHUKLA" }
+      }
+    },
+    {
+      "id": 20,
+      "intent": "Valid PANCHANGA rule — Shivaratri (BYMONTH filter)",
+      "input": "X-CALENDAR=PANCHANGA;X-TITHI=KRISHNA CHATURDASHI;X-PAKSHA=KRISHNA;DTSTART=20790101;BYMONTH=11;X-TAKE=FIRST",
+      "expected": {
+        "outcome": "parse",
+        "family": "PANCHANGA",
+        "params": { "dtstart": "20790101" }
+      }
+    },
+    {
+      "id": 21,
+      "intent": "Valid AD rule — passes through to the rrule crate (no X-CALENDAR, no X-TITHI)",
+      "input": "FREQ=YEARLY;BYMONTH=1;BYMONTHDAY=1",
+      "expected": {
+        "outcome": "parse",
+        "family": "AD"
+      }
+    },
+    {
+      "id": 22,
+      "intent": "Valid BS rule with COUNT",
+      "input": "X-CALENDAR=BS;FREQ=MONTHLY;DTSTART=20790101;COUNT=5",
+      "expected": {
+        "outcome": "parse",
+        "family": "BS",
+        "params": { "freq": "MONTHLY", "count": 5 }
+      }
+    },
+    {
+      "id": 23,
+      "intent": "Legacy tithi string (v1.0) — X-CALENDAR=BS with X-TITHI is treated as PANCHANGA",
+      "input": "X-CALENDAR=BS;FREQ=YEARLY;DTSTART=20790101;X-TITHI=EKADASHI",
+      "expected": {
+        "outcome": "parse",
+        "family": "PANCHANGA"
+      }
+    },
+    {
+      "id": 24,
+      "intent": "X-TAKE=FIRST is the only allowed X-TAKE value",
+      "input": "X-CALENDAR=PANCHANGA;X-TITHI=PURNIMA;DTSTART=20790101;X-TAKE=FIRST",
+      "expected": {
+        "outcome": "parse",
+        "family": "PANCHANGA"
+      }
+    }
+  ]
+}

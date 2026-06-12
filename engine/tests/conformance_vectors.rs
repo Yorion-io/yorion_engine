@@ -15,7 +15,7 @@ use yorion_engine::domain::recurrence::{BsFrequency, Recurrence};
 use yorion_engine::domain::recurrence::RRuleParser;
 use serde::Deserialize;
 
-const VECTORS_JSON: &str = include_str!("../../../00_docs/bs-rrule-test-vectors.json");
+const VECTORS_JSON: &str = include_str!("data/bs-rrule-test-vectors.json");
 
 #[derive(Debug, Deserialize)]
 struct VectorFile {
