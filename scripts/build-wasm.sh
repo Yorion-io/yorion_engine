@@ -4,8 +4,6 @@ set -euo pipefail
 # Build WASM binaries for web, bundler, and nodejs targets
 # Outputs to dist/wasm/
 
-export PATH="${CARGO_HOME:-$HOME/.cargo}/bin:$PATH"
-
 echo "🦀 Building WASM binaries..."
 
 # Colors for output
