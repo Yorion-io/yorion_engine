@@ -18,8 +18,10 @@ mkdir -p "$DIST_DIR"
 # Change to engine directory
 cd engine
 
+CARGO_BIN="${CARGO_HOME:-$HOME/.cargo}/bin"
+
 # Install wasm-bindgen-cli if not available
-if ! command -v wasm-bindgen &> /dev/null; then
+if ! command -v wasm-bindgen &> /dev/null && [ ! -x "$CARGO_BIN/wasm-bindgen" ]; then
     echo "📦 Installing wasm-bindgen-cli..."
     if command -v cargo-binstall &> /dev/null; then
         cargo binstall --no-confirm wasm-bindgen-cli
@@ -27,6 +29,8 @@ if ! command -v wasm-bindgen &> /dev/null; then
         cargo install wasm-bindgen-cli
     fi
 fi
+
+WASM_BINDGEN="${CARGO_BIN}/wasm-bindgen"
 
 # Check for wasm-opt (part of binaryen)
 if ! command -v wasm-opt &> /dev/null; then
@@ -56,7 +60,7 @@ generate_target() {
     local EXTRA_ARGS=$2
     
     echo -e "${BLUE}Generating bindings for $TARGET_TYPE...${NC}"
-    wasm-bindgen "$WASM_FILE" \
+    "$WASM_BINDGEN" "$WASM_FILE" \
         --target "$TARGET_TYPE" \
         --out-dir "../$DIST_DIR/$TARGET_TYPE" \
         --typescript \
