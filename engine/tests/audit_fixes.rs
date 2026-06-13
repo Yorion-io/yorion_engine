@@ -2,7 +2,7 @@
 //! checked date construction, bounded instance generation, exact JD
 //! conversion, tithi end times, and the O(1) calendar lookup.
 
-use chrono::{Datelike, NaiveDate, Timelike};
+use chrono::{NaiveDate, Timelike};
 use std::collections::HashSet;
 use yorion_engine::core_api::{CalendarEngine, TITHI_VERIFIED_THROUGH_BS};
 use yorion_engine::prelude::*;
