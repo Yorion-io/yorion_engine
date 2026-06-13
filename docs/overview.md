@@ -1,12 +1,3 @@
-<div align="center">
-  <img src="assets/logo.svg" alt="Yorion Engine" width="120" />
-
-  # YorionEngine
-
-  [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE-MIT)
-  [![Build](https://img.shields.io/github/actions/workflow/status/Yorion-io/yorion_engine/ci.yml)](https://github.com/Yorion-io/yorion_engine/actions)
-</div>
-
 A platform-agnostic Rust library for the **Bikram Sambat (BS)** calendar — the official calendar of Nepal. Accurate date conversion, astronomical (panchanga) calculations, and a recurrence-rule system for scheduling events in both solar and lunar terms.
 
 ---
