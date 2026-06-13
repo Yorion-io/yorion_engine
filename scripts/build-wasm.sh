@@ -18,10 +18,8 @@ mkdir -p "$DIST_DIR"
 # Change to engine directory
 cd engine
 
-CARGO_BIN="${CARGO_HOME:-$HOME/.cargo}/bin"
-
 # Install wasm-bindgen-cli if not available
-if ! command -v wasm-bindgen &> /dev/null && [ ! -x "$CARGO_BIN/wasm-bindgen" ]; then
+if ! command -v wasm-bindgen &> /dev/null; then
     echo "📦 Installing wasm-bindgen-cli..."
     if command -v cargo-binstall &> /dev/null; then
         cargo binstall --no-confirm wasm-bindgen-cli
@@ -30,7 +28,7 @@ if ! command -v wasm-bindgen &> /dev/null && [ ! -x "$CARGO_BIN/wasm-bindgen" ];
     fi
 fi
 
-WASM_BINDGEN="${CARGO_BIN}/wasm-bindgen"
+WASM_BINDGEN="${CARGO_HOME:-$HOME/.cargo}/bin/wasm-bindgen"
 
 # Check for wasm-opt (part of binaryen)
 if ! command -v wasm-opt &> /dev/null; then
