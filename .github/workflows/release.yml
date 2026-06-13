@@ -183,6 +183,13 @@ jobs:
       - name: Install wasm-bindgen-cli
         run: cargo binstall --no-confirm wasm-bindgen-cli
 
+      - name: Debug PATH
+        run: |
+          echo "PATH=$PATH"
+          echo "CARGO_HOME=$CARGO_HOME"
+          ls ~/.cargo/bin/ | grep wasm || echo "no wasm binaries found"
+          which wasm-bindgen || echo "wasm-bindgen not in PATH"
+
       - name: Build WASM
         run: bash scripts/build-wasm.sh
 
