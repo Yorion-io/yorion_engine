@@ -15,6 +15,12 @@ use crate::prelude::*;
 use chrono::NaiveDate;
 use std::sync::Arc;
 
+/// Last BS year for which tithi output has been validated against the
+/// official Nepali Panchanga almanac (and for which override corrections
+/// exist). Beyond this year tithi values are raw astronomical computation
+/// with no almanac verification — treat them as provisional.
+pub const TITHI_VERIFIED_THROUGH_BS: u16 = 2083;
+
 /// Core calendar engine with stable API
 pub struct CalendarEngine {
     pub(crate) conversion_service: Arc<ConversionService>,
@@ -47,7 +53,7 @@ impl CalendarEngine {
     /// This function is **Tier 1 Stable** and will never have breaking changes.
     ///
     /// # Errors
-    /// Returns `BsCalendarError::InvalidDate` if the BS date is out of range (2000-2090).
+    /// Returns `BsCalendarError::InvalidDate` if the BS date is out of range (1975-2100).
     ///
     /// # Examples
     /// ```
@@ -75,15 +81,47 @@ impl CalendarEngine {
         self.conversion_service.gregorian_to_bs(date)
     }
 
-    /// Get the Tithi for a specific Gregorian date
+    /// Create a BS date validated against the embedded calendar table.
     ///
-    /// Returns the tithi active at sunrise (the Hindu calendar convention).
+    /// Unlike [`BsDate::new`] (structural checks only), this rejects a day
+    /// that does not exist in that specific BS month (e.g. day 32 in a
+    /// 30-day month) and a year outside the supported data range.
+    ///
+    /// # Errors
+    /// Returns `BsCalendarError::CalendarDataNotFound` for an out-of-range
+    /// year and `BsCalendarError::InvalidDay` for a non-existent day.
+    pub fn checked_bs_date(&self, year: u16, month: u8, day: u8) -> Result<BsDate> {
+        let date = BsDate::new(year, month, day)?;
+        let actual_days = self.calendar().get_month_days(date.year, date.month)?;
+        if date.day > actual_days {
+            return Err(crate::error::BsCalendarError::InvalidDay(
+                date.day,
+                date.month.to_u8(),
+            ));
+        }
+        Ok(date)
+    }
+
+    /// Get the Tithi for a specific Gregorian date at **Kathmandu**.
+    ///
+    /// Returns the tithi active at sunrise (the Hindu calendar convention),
+    /// computed for the default Kathmandu location with Nepal social-calendar
+    /// overrides applied. For any other location use
+    /// [`CalendarEngine::get_tithi_at_location`].
     ///
     /// # Errors
     /// Returns error if astronomical calculation fails.
     pub fn get_tithi(&self, date: NaiveDate) -> Result<Tithi> {
+        self.get_tithi_at_location(date, &Location::kathmandu())
+    }
+
+    /// Get the Tithi for a specific Gregorian date at a given location.
+    ///
+    /// The tithi is the one active at the moment of **local sunrise** at the
+    /// supplied location.
+    pub fn get_tithi_at_location(&self, date: NaiveDate, location: &Location) -> Result<Tithi> {
         self.astronomical_service
-            .calculate_tithi_for_date(date, &Location::kathmandu())
+            .calculate_tithi_for_date(date, location)
     }
 
     /// Get the Sun's zodiac sign for a specific Gregorian date
@@ -110,6 +148,39 @@ impl CalendarEngine {
         self.astronomical_service.get_nakshatra(jd)
     }
 
+    /// Get the Yoga for a specific Gregorian date (computed at noon UTC)
+    pub fn get_yoga(&self, date: NaiveDate) -> Yoga {
+        let jd = self
+            .astronomical_service
+            .get_julian_day(date.and_hms_opt(12, 0, 0).expect("12:00:00 is always a valid time").and_utc());
+        self.astronomical_service.get_yoga(jd)
+    }
+
+    /// Get the Karana for a specific Gregorian date (computed at noon UTC)
+    pub fn get_karana(&self, date: NaiveDate) -> Karana {
+        let jd = self
+            .astronomical_service
+            .get_julian_day(date.and_hms_opt(12, 0, 0).expect("12:00:00 is always a valid time").and_utc());
+        self.astronomical_service.get_karana(jd)
+    }
+
+    /// Find when the tithi active at local sunrise of `date` ends.
+    ///
+    /// Published panchangas list tithi end times alongside the tithi name;
+    /// this returns that boundary as a UTC instant. The start of the current
+    /// tithi is the end of the previous one.
+    ///
+    /// # Errors
+    /// Returns error if the sunrise or transition search fails.
+    pub fn get_tithi_end(
+        &self,
+        date: NaiveDate,
+        location: &Location,
+    ) -> Result<chrono::DateTime<chrono::Utc>> {
+        let sunrise_dt = self.local_sunrise_utc(date, location)?;
+        self.astronomical_service.find_tithi_end(sunrise_dt)
+    }
+
     /// Get comprehensive astronomical info for a specific Gregorian date
     ///
     /// Returns info calculated at sunrise (the Hindu calendar convention).
@@ -123,6 +194,60 @@ impl CalendarEngine {
     ) -> Result<DailyAstroInfo> {
         self.astronomical_service
             .get_daily_astro_info_for_date(date, &location)
+    }
+
+    /// Get daily astronomical info plus sunrise/sunset in one pass.
+    ///
+    /// Computes sunrise once and reuses it for the sunrise-anchored panchanga
+    /// calculation, instead of the two sunrise computations a caller would
+    /// otherwise pay calling `get_daily_astro_info` and `get_sunrise`
+    /// separately.
+    ///
+    /// # Errors
+    /// Returns error if astronomical calculation fails.
+    pub fn get_daily_panchanga(
+        &self,
+        date: NaiveDate,
+        location: &Location,
+    ) -> Result<DailyPanchanga> {
+        let sunrise = self.astronomical_service.get_sunrise(date, location)?;
+        let sunset = self.astronomical_service.get_sunset(date, location)?;
+
+        let offset = chrono::FixedOffset::east_opt(location.timezone_offset_mins * 60)
+            .expect("timezone_offset_mins is within ±24h");
+        let sunrise_dt = date
+            .and_time(sunrise)
+            .and_local_timezone(offset)
+            .single()
+            .expect("local sunrise time is unambiguous")
+            .with_timezone(&chrono::Utc);
+
+        let info = self
+            .astronomical_service
+            .get_daily_astro_info(sunrise_dt, location)?;
+
+        Ok(DailyPanchanga {
+            info,
+            sunrise,
+            sunset,
+        })
+    }
+
+    /// UTC instant of local sunrise at the given date/location.
+    fn local_sunrise_utc(
+        &self,
+        date: NaiveDate,
+        location: &Location,
+    ) -> Result<chrono::DateTime<chrono::Utc>> {
+        let sunrise = self.astronomical_service.get_sunrise(date, location)?;
+        let offset = chrono::FixedOffset::east_opt(location.timezone_offset_mins * 60)
+            .expect("timezone_offset_mins is within ±24h");
+        Ok(date
+            .and_time(sunrise)
+            .and_local_timezone(offset)
+            .single()
+            .expect("local sunrise time is unambiguous")
+            .with_timezone(&chrono::Utc))
     }
 
     /// Get sunrise time for a specific Gregorian date
@@ -194,6 +319,16 @@ impl CalendarEngine {
         nakshatra.name_with_language(lang).to_string()
     }
 
+    /// Get Yoga name in specified language
+    pub fn get_yoga_name(&self, yoga: Yoga, lang: Language) -> String {
+        yoga.name_with_language(lang).to_string()
+    }
+
+    /// Get Karana name in specified language
+    pub fn get_karana_name(&self, karana: Karana, lang: Language) -> String {
+        karana.name_with_language(lang).to_string()
+    }
+
     /// Generate AD (Gregorian) recurring instances within a date range
     ///
     /// # Errors
@@ -253,6 +388,8 @@ impl CalendarEngine {
                 sun_sign: info.sun_sign,
                 moon_sign: info.moon_sign,
                 nakshatra: info.nakshatra,
+                yoga: info.yoga,
+                karana: info.karana,
                 is_overridden: info.is_overridden,
             });
         }
@@ -361,7 +498,20 @@ pub struct CalendarDay {
     pub sun_sign: ZodiacSign,
     pub moon_sign: ZodiacSign,
     pub nakshatra: Nakshatra,
+    pub yoga: Yoga,
+    pub karana: Karana,
     pub is_overridden: bool,
+}
+
+/// Daily astronomical info bundled with sunrise/sunset times.
+///
+/// Produced by [`CalendarEngine::get_daily_panchanga`], which computes
+/// sunrise once for both the times and the sunrise-anchored panchanga.
+#[derive(Debug, Clone)]
+pub struct DailyPanchanga {
+    pub info: DailyAstroInfo,
+    pub sunrise: chrono::NaiveTime,
+    pub sunset: chrono::NaiveTime,
 }
 
 /// Full month calendar data

@@ -297,7 +297,7 @@ fn bench_unbounded(c: &mut Criterion) {
     let mut g = c.benchmark_group("unbounded_window");
 
     // The engine always requires explicit start+end from the caller.
-    // "Unbounded" here means we pass the full engine data range (BS 2000–2090)
+    // "Unbounded" here means we pass the full engine data range (BS 1975–2100)
     // so we can see the true cost of walking every day with no month filter.
 
     let full_start = bs(2079, 1, 1);

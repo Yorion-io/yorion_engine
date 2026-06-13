@@ -6,9 +6,9 @@ This document catalogues every assumption the library makes — algorithmic, cal
 
 ## 1. Calendar Data
 
-### 1.1 Supported range: BS 2000–2090
+### 1.1 Supported range: BS 1975–2100
 
-All BS ↔ AD conversion depends on a pre-computed table of anchor points (first day of each BS year in Gregorian) and the 12 month lengths per year. That table covers **BS 2000–2090 only** (AD 1943–2033). Any date outside this range throws `YorionError::CalendarDataNotFound`.
+All BS ↔ AD conversion depends on a pre-computed table of anchor points (first day of each BS year in Gregorian) and the 12 month lengths per year. That table covers **BS 1975–2100 only** (AD 1918–2044). Any date outside this range throws `YorionError::CalendarDataNotFound`.
 
 Source: `data/bs_calendar_data.json`, embedded at compile time via `build.rs`.
 
@@ -32,15 +32,15 @@ Source: `services/instance_generator.rs:265`.
 
 ## 2. Astronomical Calculations
 
-### 2.1 Ayanamsa fixed at 24.0°
+### 2.1 Ayanamsa: computed Lahiri (linear model)
 
-All sidereal longitude conversions (tithi, zodiac, nakshatra) subtract a fixed ayanamsa of **24.0°** from the tropical ecliptic longitude. This is an approximation of the Lahiri ayanamsa for the present epoch.
+All sidereal longitude conversions (zodiac, nakshatra, yoga) subtract the **Lahiri (Chitrapaksha) ayanamsa**, computed per date with a linear model: 23°51′11.5″ at the J2000.0 epoch, accumulating ~50.29″ per Julian year. Across the supported range (BS 1975–2100) the model is accurate to well under 0.01°.
 
-The real Lahiri ayanamsa drifts by ~50 arcseconds per year (≈ 0.014°/year). For dates near the present the error is small; for dates near the edge of the supported range (BS 2000, i.e. AD 1943) it introduces roughly 1° of error, which may shift zodiac sign or nakshatra assignments near sign boundaries.
+This replaced an earlier fixed 24.0° approximation, which was ~0.25° off near the range edges — enough to misassign signs and nakshatras near boundaries. Tithi and karana are unaffected by the ayanamsa either way (they depend on the moon−sun *difference*, from which the ayanamsa cancels).
 
-**This is not configurable.** If a tradition uses a different ayanamsa (Raman, Krishnamurti, etc.) the results will differ.
+**The tradition is not configurable.** If a tradition uses a different ayanamsa (Raman, Krishnamurti, etc.) the results will differ. `AstronomicalService::ayanamsa(jd)` exposes the value used.
 
-Source: `services/astronomical.rs:327`.
+Source: `services/astronomical.rs` (`ayanamsa`, `LAHIRI_AYANAMSA_J2000`).
 
 ### 2.2 Tithi = one-twelfth of the moon-sun elongation cycle
 
@@ -53,6 +53,12 @@ Source: `services/astronomical.rs:127`.
 The library divides the ecliptic into **27 equal segments** of 360°/27 ≈ 13.333° each. Some traditions use unequal nakshatra widths. Equal divisions are used universally in software calendar implementations and differ from the unequal scheme only at nakshatra boundaries.
 
 Source: `services/astronomical.rs:318`.
+
+### 2.3a Yoga and Karana complete the five angas
+
+The engine computes all five panchanga angas: tithi, vara (weekday), nakshatra, **yoga** (27 equal divisions of the summed sun+moon sidereal longitudes) and **karana** (half-tithi; 60 half-tithis mapped onto 7 movable + 4 fixed karanas, with Kimstughna at the first half of Shukla Pratipada). Both are part of `DailyAstroInfo` and the month-calendar output.
+
+The end time of the sunrise tithi is exposed via `CalendarEngine::get_tithi_end` / `AstronomicalService::find_tithi_end` (iterative search to the next 12° elongation boundary, stepped at the fastest lunar rate so it cannot overshoot past the convergence tolerance).
 
 ### 2.4 Amavasya search uses a 12.19°/day lunar drift rate
 
@@ -120,7 +126,7 @@ For monthly frequency, `BYMONTH` filters out months that do not match; it does n
 
 ### 4.3 TithiRecurrenceRule defaults skip_adhik = true
 
-Unless explicitly set to `false`, tithi recurrence rules skip occurrences that fall in an adhik masa (intercalary lunar month). The skip is only honoured in the `TithiInstanceGenerator` path (used by `CalendarEngine`). The legacy `InstanceGenerator::generate_tithi_instances` path accepts the flag but does not enforce it.
+Unless explicitly set to `false`, tithi recurrence rules skip occurrences that fall in an adhik masa (intercalary lunar month). The skip is honoured by the `TithiInstanceGenerator` path, which is the engine's only tithi-expansion path. (A legacy duplicate in `InstanceGenerator` that ignored the flag has been removed.)
 
 Source: `domain/recurrence/tithi_rules.rs:49`, `services/tithi_generator.rs:149`.
 
@@ -140,11 +146,11 @@ Source: `services/tithi_generator.rs:65–139`.
 
 `AdRecurrenceRule` stores the raw RRULE string and delegates entirely to the `rrule` v0.14 crate for expansion. All RFC 5545 semantics (EXDATE, RDATE, BYYEARDAY, BYWEEKNO, etc.) are the `rrule` crate's responsibility. The BS engine does no AD-specific validation beyond checking that the string is parseable.
 
-### 4.7 Instance generation is capped at 10,000 occurrences
+### 4.7 Instance generation is capped at 10,000 occurrences — as an error
 
-`generate_bs_instances_with_clamp()` breaks the expansion loop after producing 10,000 instances. This is a safety guard against infinite rules (no COUNT, no UNTIL). It is not surfaced as an error; callers receive a silently truncated list.
+`generate_bs_instances_with_clamp()` aborts the expansion after 10,000 instances with `BsCalendarError::InstanceLimitExceeded`. This is a safety guard against unbounded rules (no COUNT, no UNTIL, huge window). It is a hard error, not a silent truncation: a clipped list would be indistinguishable from a complete one. Callers must bound the rule with `COUNT`/`UNTIL` or a smaller window.
 
-Source: `services/instance_generator.rs:124–127`.
+Source: `services/instance_generator.rs` (`MAX_INSTANCES`).
 
 ---
 
@@ -172,7 +178,7 @@ The astronomical tithi calculation (§2.2–2.5) disagrees with published Pancha
 
 ### 6.2 Source
 
-Overrides are loaded from `data/tithi_exceptions.csv` at compile time. The CSV columns are: `id, AD_date (YYYY-MM-DD), tithi_name`. The build script generates a static Rust array `TITHI_OVERRIDES: [((i32, u8, u8), Tithi); N]`.
+Overrides are loaded from `data/tithi_exceptions.csv` at compile time. The CSV has eight columns — `BS Date, AD Date, HP Tithi, HP Paksha, HP Tithi Day, Generated Tithi, Generated Paksha, Generated Tithi Day` — capturing both the published-almanac (HP) value and the engine's astronomical (Generated) value for each diverging date. The build script reads the `AD Date` and `HP Tithi` columns and generates a static Rust array `TITHI_OVERRIDES: [((i32, u8, u8), Tithi); N]` mapping the Gregorian date to the almanac tithi.
 
 As of the current data set there are **176 override entries**, covering dates where the engine's astronomical output differs from the official Nepali Panchanga.
 
@@ -180,7 +186,9 @@ Source: `build.rs:166–222`, `adapters/static_overrides.rs`.
 
 ### 6.3 Coverage gap after BS 2083
 
-The reference almanac covers tithi data only through BS 2083 (AD ~2027). Override entries beyond this date cannot be verified against an authoritative source. After BS 2083, tithi values come from the raw astronomical calculation with no correction applied.
+The reference almanac covers tithi data only through BS 2083 (AD ~2027) — the last reference file is `tests/data/calendar/calendar_2083.csv`, exposed as `core_api::TITHI_VERIFIED_THROUGH_BS`. Override entries beyond this date cannot be verified against an authoritative source. After BS 2083, tithi values come from the raw astronomical calculation with no correction applied.
+
+This gap is **not** closed automatically as time passes. It must be extended each year when a new official patro is published: add the new `calendar_20XX.csv`, regenerate `tithi_exceptions.csv` (`cargo run --example gen_tithi_exceptions`), and bump `TITHI_VERIFIED_THROUGH_BS`. See [CONTRIBUTING.md → Yearly maintenance](../CONTRIBUTING.md#yearly-maintenance-refreshing-tithi-data-when-a-new-almanac-is-published) for the full runbook. Note this is distinct from the BS↔AD conversion table, which already covers through BS 2100 and needs no yearly update.
 
 ### 6.4 Override is checked before astronomical calculation
 
@@ -234,7 +242,7 @@ The following cases are handled by `unwrap()` or equivalent and will panic on un
 |---|---|---|
 | `astronomical.rs:39` | `date.and_hms_opt(12, 0, 0)` | Noon on a valid `NaiveDate` is always representable |
 | `astronomical.rs:40` | `.and_local_timezone(Utc)` | UTC has no ambiguous or non-existent times |
-| `tithi_generator.rs:204` | `NaiveDate::from_ymd_opt(...)` | Inputs come from a JD that was derived from a valid date |
-| `tithi_generator.rs:205` | `NaiveTime::from_hms_opt(...)` | Hours/minutes/seconds come from integer floor operations bounded by JD arithmetic |
+
+The former hand-rolled `jd_to_utc` in `tithi_generator.rs` (which silently substituted 2000-01-01 on conversion failure) has been replaced by the exact `services::astronomical::jd_to_datetime`, which returns a proper error for out-of-range Julian Days.
 
 These are not defensive unwraps but structural invariants. If the upstream calendar data or JD arithmetic is correct, these cannot fail.

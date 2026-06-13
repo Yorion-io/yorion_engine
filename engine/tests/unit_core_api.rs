@@ -103,7 +103,7 @@ fn test_event_instances_flag_calendar_clamp_as_exception() {
 #[test]
 fn test_out_of_range_year() {
     let engine = test_engine();
-    let bs = bs_date(2100, 1, 1); // Beyond supported range
+    let bs = bs_date(2101, 1, 1); // Beyond supported range
     assert!(engine.bs_to_gregorian(bs).is_err());
 }
 

@@ -6,7 +6,7 @@
 //! # Features
 //!
 //! - Accurate BS ↔ Gregorian date conversion using anchor points
-//! - Support for BS years 2000-2090
+//! - Support for BS years 1975-2100
 //! - Tithi (lunar day) calculations
 //! - Recurrence rules for both BS and tithi-based scheduling
 //! - Clean architecture with ports and adapters
@@ -61,8 +61,8 @@ uniffi::include_scaffolding!("uniffi");
 pub mod prelude {
     pub use crate::adapters::{StaticCalendarProvider, StaticTithiOverrideProvider};
     pub use crate::domain::{
-        BsDate, BsFrequency, BsMonth, BsRecurrenceRule, CalendarVersion, EventInstance, Location,
-        Nakshatra, Paksha, Tithi, TithiRecurrenceRule, ZodiacSign,
+        BsDate, BsFrequency, BsMonth, BsRecurrenceRule, CalendarVersion, EventInstance, Karana,
+        Location, Nakshatra, Paksha, Tithi, TithiRecurrenceRule, Yoga, ZodiacSign,
     };
     pub use crate::error::{BsCalendarError, Result};
     pub use crate::ports::{CalendarProvider, TithiOverrideProvider};

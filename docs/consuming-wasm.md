@@ -207,11 +207,16 @@ shasum -a 256 -c SHA256SUMS
 
 The WASM bindings expose the following main types:
 
-- `CalendarEngine` - Main engine for conversions and calculations
 - `BsDate` - Bikram Sambat date representation
 - `Tithi` - Lunar day enum
 - `ZodiacSign` - Zodiac sign enum
 - `Nakshatra` - Nakshatra enum
+- `Yoga` - Yoga enum (one of the five panchanga angas)
+- `Karana` - Karana enum (one of the five panchanga angas)
+
+…and free functions including `gregorian_to_bs`, `bs_to_gregorian`, `get_tithi`, `get_daily_astro_info_with_location` (returns tithi, sun/moon sign, nakshatra, yoga, karana, sunrise, sunset), `get_month_calendar_with_location`, `get_month_events`, and the localized name helpers `get_tithi_name` / `get_zodiac_name` / `get_nakshatra_name` / `get_yoga_name` / `get_karana_name`.
+
+> The WASM surface is intentionally narrower than the native Rust `CalendarEngine`: lower-level helpers such as `get_tithi_end`, `get_daily_panchanga`, `checked_bs_date`, and the raw `get_yoga`/`get_karana` enum getters are Rust-only. The data they produce (yoga, karana) is still available through `get_daily_astro_info_with_location` and `get_month_calendar_with_location`.
 
 See the TypeScript definitions (`.d.ts` files) in each WASM target for complete API documentation.
 
@@ -231,7 +236,7 @@ Compresses to ~1 MB over HTTP/2 with gzip. Size comes from:
 
 | Source | Contribution |
 |---|---|
-| 91 years of calendar data | ~800 KB |
+| 126 years of calendar data | ~800 KB |
 | Astronomical code (`suncalc`, `astro`) | ~1.2 MB |
 | Recurrence engine (`rrule` + BS extensions) | ~600 KB |
 | Rust std (panic, fmt, allocator) | ~700 KB |
@@ -240,4 +245,4 @@ Compresses to ~1 MB over HTTP/2 with gzip. Size comes from:
 
 1. `wasm-opt -Oz` — build script calls this automatically if `binaryen` is installed (~10–15% saving).
 2. Feature-flag astronomical calculations — not yet implemented; estimated ~800 KB saving. PRs welcome.
-3. Narrow the calendar data range from BS 2000–2090 — not yet implemented; would require a build-time env var.
+3. Narrow the calendar data range from BS 1975–2100 — not yet implemented; would require a build-time env var.

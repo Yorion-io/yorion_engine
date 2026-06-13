@@ -368,34 +368,43 @@ let loc = Location::with_social_calendar(40.7, -74.0, "NY", -300, true);
 
 ### Generating Instances
 
+Instance generation goes through `CalendarEngine`, the single public entry point.
+
 ```rust
-use yorion_engine::services::InstanceGenerator;
+use yorion_engine::prelude::*;
+use yorion_engine::core_api::CalendarEngine;
+use yorion_engine::domain::CalendarVersion;
 
-let generator = InstanceGenerator::new(conversion_service);
+let engine = CalendarEngine::new();
 
-// BS recurrence
+// BS recurrence — returns the bare occurrence dates.
 let bs_rule = BsRecurrenceRule::from_rrule(
     "X-CALENDAR=BS;FREQ=MONTHLY;DTSTART=20800101;BYMONTHDAY=1"
 ).unwrap();
 
-let instances = generator.generate_bs_instances(
+let dates = engine.generate_bs_instances(
     &bs_rule,
     BsDate::new(2080, 1, 1).unwrap(),
-    BsDate::new(2081, 1, 1).unwrap()
+    BsDate::new(2081, 1, 1).unwrap(),
 )?;
 
-// Tithi recurrence
+// Tithi recurrence — returns full EventInstances (each carries its tithi).
 let tithi_rule = TithiRecurrenceRule::from_rrule(
     "X-CALENDAR=PANCHANGA;FREQ=MONTHLY;DTSTART=20800101;X-TITHI=EKADASHI"
 ).unwrap();
 
-let instances = generator.generate_tithi_instances(
+let instances = engine.generate_tithi_instances(
+    "ekadashi",                       // event_id
+    "Ekadashi",                       // title
     &tithi_rule,
     BsDate::new(2080, 1, 1).unwrap(),
     BsDate::new(2081, 1, 1).unwrap(),
-    &astro_service
+    CalendarVersion::official("v1".to_string()),
+    Location::kathmandu(),
 )?;
 ```
+
+> **Bound your rules.** An unbounded rule (no `COUNT`, no `UNTIL`) expanded over a large window is capped at 10,000 occurrences, at which point `generate_bs_instances` returns `BsCalendarError::InstanceLimitExceeded` rather than silently truncating. Always supply a `COUNT`/`UNTIL` or a finite window.
 
 ---
 

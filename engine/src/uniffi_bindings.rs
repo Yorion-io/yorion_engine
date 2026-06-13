@@ -10,7 +10,8 @@ use crate::domain::recurrence::{
 };
 use crate::domain::tithi::{Location as CoreLocation, Paksha as CorePaksha, Tithi as CoreTithi};
 use crate::domain::zodiac::{
-    DailyAstroInfo as CoreDailyAstroInfo, Nakshatra as CoreNakshatra, ZodiacSign as CoreZodiacSign,
+    DailyAstroInfo as CoreDailyAstroInfo, Karana as CoreKarana, Nakshatra as CoreNakshatra,
+    Yoga as CoreYoga, ZodiacSign as CoreZodiacSign,
 };
 use crate::domain::{
     BsDate as CoreBsDate, CalendarVersion as CoreCalendarVersion,
@@ -148,6 +149,8 @@ pub struct DailyAstroInfo {
     pub sun_sign: ZodiacSign,
     pub moon_sign: ZodiacSign,
     pub nakshatra: Nakshatra,
+    pub yoga: Yoga,
+    pub karana: Karana,
     pub is_overridden: bool,
 }
 
@@ -158,6 +161,8 @@ impl From<CoreDailyAstroInfo> for DailyAstroInfo {
             sun_sign: info.sun_sign.into(),
             moon_sign: info.moon_sign.into(),
             nakshatra: info.nakshatra.into(),
+            yoga: info.yoga.into(),
+            karana: info.karana.into(),
             is_overridden: info.is_overridden,
         }
     }
@@ -174,6 +179,8 @@ pub struct CalendarDay {
     pub sun_sign: ZodiacSign,
     pub moon_sign: ZodiacSign,
     pub nakshatra: Nakshatra,
+    pub yoga: Yoga,
+    pub karana: Karana,
     pub is_overridden: bool,
 }
 
@@ -189,6 +196,8 @@ impl From<CoreCalendarDay> for CalendarDay {
             sun_sign: d.sun_sign.into(),
             moon_sign: d.moon_sign.into(),
             nakshatra: d.nakshatra.into(),
+            yoga: d.yoga.into(),
+            karana: d.karana.into(),
             is_overridden: d.is_overridden,
         }
     }
@@ -367,6 +376,157 @@ impl From<Nakshatra> for CoreNakshatra {
     }
 }
 
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Yoga {
+    Vishkambha,
+    Priti,
+    Ayushman,
+    Saubhagya,
+    Shobhana,
+    Atiganda,
+    Sukarman,
+    Dhriti,
+    Shula,
+    Ganda,
+    Vriddhi,
+    Dhruva,
+    Vyaghata,
+    Harshana,
+    Vajra,
+    Siddhi,
+    Vyatipata,
+    Variyan,
+    Parigha,
+    Shiva,
+    Siddha,
+    Sadhya,
+    Shubha,
+    Shukla,
+    Brahma,
+    Indra,
+    Vaidhriti,
+}
+
+impl From<CoreYoga> for Yoga {
+    fn from(value: CoreYoga) -> Self {
+        match value {
+            CoreYoga::Vishkambha => Yoga::Vishkambha,
+            CoreYoga::Priti => Yoga::Priti,
+            CoreYoga::Ayushman => Yoga::Ayushman,
+            CoreYoga::Saubhagya => Yoga::Saubhagya,
+            CoreYoga::Shobhana => Yoga::Shobhana,
+            CoreYoga::Atiganda => Yoga::Atiganda,
+            CoreYoga::Sukarman => Yoga::Sukarman,
+            CoreYoga::Dhriti => Yoga::Dhriti,
+            CoreYoga::Shula => Yoga::Shula,
+            CoreYoga::Ganda => Yoga::Ganda,
+            CoreYoga::Vriddhi => Yoga::Vriddhi,
+            CoreYoga::Dhruva => Yoga::Dhruva,
+            CoreYoga::Vyaghata => Yoga::Vyaghata,
+            CoreYoga::Harshana => Yoga::Harshana,
+            CoreYoga::Vajra => Yoga::Vajra,
+            CoreYoga::Siddhi => Yoga::Siddhi,
+            CoreYoga::Vyatipata => Yoga::Vyatipata,
+            CoreYoga::Variyan => Yoga::Variyan,
+            CoreYoga::Parigha => Yoga::Parigha,
+            CoreYoga::Shiva => Yoga::Shiva,
+            CoreYoga::Siddha => Yoga::Siddha,
+            CoreYoga::Sadhya => Yoga::Sadhya,
+            CoreYoga::Shubha => Yoga::Shubha,
+            CoreYoga::Shukla => Yoga::Shukla,
+            CoreYoga::Brahma => Yoga::Brahma,
+            CoreYoga::Indra => Yoga::Indra,
+            CoreYoga::Vaidhriti => Yoga::Vaidhriti,
+        }
+    }
+}
+
+impl From<Yoga> for CoreYoga {
+    fn from(value: Yoga) -> Self {
+        match value {
+            Yoga::Vishkambha => CoreYoga::Vishkambha,
+            Yoga::Priti => CoreYoga::Priti,
+            Yoga::Ayushman => CoreYoga::Ayushman,
+            Yoga::Saubhagya => CoreYoga::Saubhagya,
+            Yoga::Shobhana => CoreYoga::Shobhana,
+            Yoga::Atiganda => CoreYoga::Atiganda,
+            Yoga::Sukarman => CoreYoga::Sukarman,
+            Yoga::Dhriti => CoreYoga::Dhriti,
+            Yoga::Shula => CoreYoga::Shula,
+            Yoga::Ganda => CoreYoga::Ganda,
+            Yoga::Vriddhi => CoreYoga::Vriddhi,
+            Yoga::Dhruva => CoreYoga::Dhruva,
+            Yoga::Vyaghata => CoreYoga::Vyaghata,
+            Yoga::Harshana => CoreYoga::Harshana,
+            Yoga::Vajra => CoreYoga::Vajra,
+            Yoga::Siddhi => CoreYoga::Siddhi,
+            Yoga::Vyatipata => CoreYoga::Vyatipata,
+            Yoga::Variyan => CoreYoga::Variyan,
+            Yoga::Parigha => CoreYoga::Parigha,
+            Yoga::Shiva => CoreYoga::Shiva,
+            Yoga::Siddha => CoreYoga::Siddha,
+            Yoga::Sadhya => CoreYoga::Sadhya,
+            Yoga::Shubha => CoreYoga::Shubha,
+            Yoga::Shukla => CoreYoga::Shukla,
+            Yoga::Brahma => CoreYoga::Brahma,
+            Yoga::Indra => CoreYoga::Indra,
+            Yoga::Vaidhriti => CoreYoga::Vaidhriti,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Karana {
+    Bava,
+    Balava,
+    Kaulava,
+    Taitila,
+    Gara,
+    Vanija,
+    Vishti,
+    Shakuni,
+    Chatushpada,
+    Naga,
+    Kimstughna,
+}
+
+impl From<CoreKarana> for Karana {
+    fn from(value: CoreKarana) -> Self {
+        match value {
+            CoreKarana::Bava => Karana::Bava,
+            CoreKarana::Balava => Karana::Balava,
+            CoreKarana::Kaulava => Karana::Kaulava,
+            CoreKarana::Taitila => Karana::Taitila,
+            CoreKarana::Gara => Karana::Gara,
+            CoreKarana::Vanija => Karana::Vanija,
+            CoreKarana::Vishti => Karana::Vishti,
+            CoreKarana::Shakuni => Karana::Shakuni,
+            CoreKarana::Chatushpada => Karana::Chatushpada,
+            CoreKarana::Naga => Karana::Naga,
+            CoreKarana::Kimstughna => Karana::Kimstughna,
+        }
+    }
+}
+
+impl From<Karana> for CoreKarana {
+    fn from(value: Karana) -> Self {
+        match value {
+            Karana::Bava => CoreKarana::Bava,
+            Karana::Balava => CoreKarana::Balava,
+            Karana::Kaulava => CoreKarana::Kaulava,
+            Karana::Taitila => CoreKarana::Taitila,
+            Karana::Gara => CoreKarana::Gara,
+            Karana::Vanija => CoreKarana::Vanija,
+            Karana::Vishti => CoreKarana::Vishti,
+            Karana::Shakuni => CoreKarana::Shakuni,
+            Karana::Chatushpada => CoreKarana::Chatushpada,
+            Karana::Naga => CoreKarana::Naga,
+            Karana::Kimstughna => CoreKarana::Kimstughna,
+        }
+    }
+}
+
 // Ensure Zodiac reverse mapping
 impl From<ZodiacSign> for CoreZodiacSign {
     fn from(sign: ZodiacSign) -> Self {
@@ -521,7 +681,10 @@ impl From<CoreError> for BsCalendarError {
             CoreError::InvalidRecurrenceRule(_)
             | CoreError::InvalidRRule(_)
             | CoreError::RRuleRejected { .. }
-            | CoreError::UnsupportedRRuleFeature(_) => BsCalendarError::InvalidRecurrenceRule,
+            | CoreError::UnsupportedRRuleFeature(_)
+            // An unbounded recurrence that overran the safety limit is, from the
+            // caller's perspective, a rule problem (add COUNT/UNTIL).
+            | CoreError::InstanceLimitExceeded(_) => BsCalendarError::InvalidRecurrenceRule,
         }
     }
 }
@@ -818,6 +981,18 @@ impl CalendarEngine {
         let core_nakshatra: CoreNakshatra = nakshatra.into(); // Need From<Nakshatra> for CoreNakshatra
         let core_lang: CoreLanguage = lang.into();
         self.core.get_nakshatra_name(core_nakshatra, core_lang)
+    }
+
+    pub fn get_yoga_name(&self, yoga: Yoga, lang: Language) -> String {
+        let core_yoga: CoreYoga = yoga.into();
+        let core_lang: CoreLanguage = lang.into();
+        self.core.get_yoga_name(core_yoga, core_lang)
+    }
+
+    pub fn get_karana_name(&self, karana: Karana, lang: Language) -> String {
+        let core_karana: CoreKarana = karana.into();
+        let core_lang: CoreLanguage = lang.into();
+        self.core.get_karana_name(core_karana, core_lang)
     }
 }
 

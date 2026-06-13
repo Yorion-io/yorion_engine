@@ -13,11 +13,14 @@ mod helpers;
 fn test_static_provider() {
     let provider = StaticCalendarProvider::new();
 
-    assert_eq!(provider.version(), "official-2000-2090");
+    assert_eq!(provider.version(), "official-1975-2100");
     assert!(provider.is_official());
 
     assert!(provider.has_year(2080));
-    assert!(!provider.has_year(1999));
+    assert!(provider.has_year(1975));
+    assert!(provider.has_year(2100));
+    assert!(!provider.has_year(1974));
+    assert!(!provider.has_year(2101));
 
     assert_eq!(provider.get_month_days(2080, BsMonth::Baisakh).unwrap(), 31);
     assert_eq!(provider.get_month_days(2080, BsMonth::Jestha).unwrap(), 32);
@@ -32,9 +35,9 @@ fn test_static_provider() {
 fn test_calendar_data_range() {
     use yorion_engine::adapters::static_calendar::CALENDAR_DATA;
 
-    assert_eq!(CALENDAR_DATA.first().unwrap().year, 2000);
-    assert_eq!(CALENDAR_DATA.last().unwrap().year, 2090);
-    assert_eq!(CALENDAR_DATA.len(), 91);
+    assert_eq!(CALENDAR_DATA.first().unwrap().year, 1975);
+    assert_eq!(CALENDAR_DATA.last().unwrap().year, 2100);
+    assert_eq!(CALENDAR_DATA.len(), 126);
 }
 
 // ===== Static Tithi Override Provider Tests =====

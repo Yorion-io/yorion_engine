@@ -400,10 +400,6 @@ impl Location {
         }
     }
 
-    #[wasm_bindgen(getter)]
-    pub fn name(&self) -> String {
-        self.name.clone()
-    }
 }
 
 impl Location {

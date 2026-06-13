@@ -19,6 +19,8 @@ pub struct WasmCalendarDay {
     pub sun_sign: ZodiacSign,
     pub moon_sign: ZodiacSign,
     pub nakshatra: Nakshatra,
+    pub yoga: Yoga,
+    pub karana: Karana,
     pub is_overridden: bool,
 }
 
@@ -77,6 +79,8 @@ pub fn get_month_calendar_with_location(
             sun_sign: day.sun_sign,
             moon_sign: day.moon_sign,
             nakshatra: day.nakshatra,
+            yoga: day.yoga,
+            karana: day.karana,
             is_overridden: day.is_overridden,
         })
         .collect();
@@ -138,6 +142,18 @@ pub fn get_nakshatra_name(nakshatra: Nakshatra, lang: Language) -> String {
     engine.get_nakshatra_name(nakshatra, lang)
 }
 
+#[wasm_bindgen]
+pub fn get_yoga_name(yoga: Yoga, lang: Language) -> String {
+    let engine = get_engine();
+    engine.get_yoga_name(yoga, lang)
+}
+
+#[wasm_bindgen]
+pub fn get_karana_name(karana: Karana, lang: Language) -> String {
+    let engine = get_engine();
+    engine.get_karana_name(karana, lang)
+}
+
 #[wasm_bindgen(getter_with_clone)]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct WasmDailyAstroInfo {
@@ -145,6 +161,8 @@ pub struct WasmDailyAstroInfo {
     pub sun_sign: ZodiacSign,
     pub moon_sign: ZodiacSign,
     pub nakshatra: Nakshatra,
+    pub yoga: Yoga,
+    pub karana: Karana,
     pub sunrise: String,
     pub sunset: String,
     pub is_overridden: bool,
@@ -193,25 +211,21 @@ pub fn get_daily_astro_info_with_location(
     let gregorian = NaiveDate::from_ymd_opt(year, month, day)
         .ok_or_else(|| JsValue::from_str("Invalid Gregorian Date"))?;
 
-    let info = engine
-        .get_daily_astro_info(gregorian, location.clone())
-        .map_err(|e| JsValue::from_str(&e.to_string()))?;
-
-    let sunrise = engine
-        .get_sunrise(gregorian, location.clone())
-        .map_err(|e| JsValue::from_str(&e.to_string()))?;
-    let sunset = engine
-        .get_sunset(gregorian, location.clone())
+    // Single-pass: computes sunrise once for both the panchanga and the times.
+    let panchanga = engine
+        .get_daily_panchanga(gregorian, location)
         .map_err(|e| JsValue::from_str(&e.to_string()))?;
 
     Ok(WasmDailyAstroInfo {
-        tithi: info.tithi,
-        sun_sign: info.sun_sign,
-        moon_sign: info.moon_sign,
-        nakshatra: info.nakshatra,
-        sunrise: sunrise.format("%H:%M:%S").to_string(),
-        sunset: sunset.format("%H:%M:%S").to_string(),
-        is_overridden: info.is_overridden,
+        tithi: panchanga.info.tithi,
+        sun_sign: panchanga.info.sun_sign,
+        moon_sign: panchanga.info.moon_sign,
+        nakshatra: panchanga.info.nakshatra,
+        yoga: panchanga.info.yoga,
+        karana: panchanga.info.karana,
+        sunrise: panchanga.sunrise.format("%H:%M:%S").to_string(),
+        sunset: panchanga.sunset.format("%H:%M:%S").to_string(),
+        is_overridden: panchanga.info.is_overridden,
     })
 }
 

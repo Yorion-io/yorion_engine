@@ -7,24 +7,60 @@ use yorion_engine::domain::{BsDate, BsMonth};
 use chrono::NaiveDate;
 use proptest::prelude::*;
 
-/// Test that BS to AD to BS conversion is a perfect roundtrip for VALID dates
+/// Test that BS to AD to BS conversion is a perfect roundtrip for VALID dates.
+///
+/// Covers the FULL supported BS range 1975..=2100 (inclusive of the last
+/// year). Earlier this stopped at 2089, which let a stale 2090 Baisakh
+/// length (31 vs the correct 30) escape — see `month_lengths_match_anchor_gaps`.
 #[test]
 fn test_roundtrip_bs_to_ad_to_bs() {
     let engine = CalendarEngine::new();
 
     proptest!(|(
-        year in 2000u16..2089,
+        year in 1975u16..=2100,
         month in 1u8..=12,
-        day in 1u8..=31
+        day in 1u8..=32
     )| {
-        if let Ok(bs_original) = BsDate::new(year, month, day) {
-            if let Ok(ad) = engine.bs_to_gregorian(bs_original) {
-                let bs_back = engine.gregorian_to_bs(ad)?;
-                prop_assert_eq!(bs_original, bs_back,
-                    "Roundtrip failed: {} -> {} -> {}", bs_original, ad, bs_back);
-            }
+        // checked_bs_date rejects days that don't exist in that BS month,
+        // so only genuinely valid dates are round-tripped.
+        if let Ok(bs_original) = engine.checked_bs_date(year, month, day) {
+            let ad = engine.bs_to_gregorian(bs_original)?;
+            let bs_back = engine.gregorian_to_bs(ad)?;
+            prop_assert_eq!(bs_original, bs_back,
+                "Roundtrip failed: {} -> {} -> {}", bs_original, ad, bs_back);
         }
     });
+}
+
+/// Internal-consistency invariant for the embedded calendar table: each BS
+/// year's 12 month lengths must sum to exactly the number of days between
+/// its 1-Baisakh anchor and the next year's anchor. A mismatch means a month
+/// length (or an anchor) is wrong in `bs_calendar_data.json`.
+///
+/// This is a deterministic full-range check (no proptest) so a single bad
+/// year is reported precisely. It is the test that the BS 2085/2086/2089 and
+/// 2090 data corrections (verified against the `nepali-datetime` reference
+/// table and Hamro Patro) were made to satisfy.
+#[test]
+fn month_lengths_match_anchor_gaps() {
+    let engine = CalendarEngine::new();
+    let cal = engine.calendar();
+
+    for year in 1975u16..2100 {
+        let total: i64 = (1..=12u8)
+            .map(|m| {
+                cal.get_month_days(year, BsMonth::from_u8(m).unwrap()).unwrap() as i64
+            })
+            .sum();
+        let gap = (cal.get_first_baisakh(year + 1).unwrap()
+            - cal.get_first_baisakh(year).unwrap())
+        .num_days();
+        assert_eq!(
+            total, gap,
+            "BS {year}: month lengths sum to {total} but the gap to {}'s anchor is {gap}",
+            year + 1
+        );
+    }
 }
 
 /// Test that AD to BS to AD conversion is a perfect roundtrip
@@ -33,7 +69,7 @@ fn test_roundtrip_ad_to_bs_to_ad() {
     let engine = CalendarEngine::new();
 
     proptest!(|(
-        year in 1943i32..2033,
+        year in 1919i32..2044,
         month in 1u32..=12,
         day in 1u32..=28  // Use 28 to avoid month-end edge cases
     )| {
@@ -52,7 +88,7 @@ fn test_roundtrip_ad_to_bs_to_ad() {
 #[test]
 fn test_bs_date_creation_and_conversion() {
     proptest!(|(
-        year in 2000u16..2089,
+        year in 1975u16..2100,
         month in 1u8..=12,
         day in 1u8..=31
     )| {
@@ -79,7 +115,7 @@ fn test_chronological_order() {
     let engine = CalendarEngine::new();
 
     proptest!(|(
-        year in 2000u16..2089,
+        year in 1975u16..2100,
         month in 1u8..=12,
         day in 1u8..=15  // Use smaller day to ensure we can add 1
     )| {
@@ -104,7 +140,7 @@ fn test_chronological_order() {
 fn test_month_boundaries() {
     let engine = CalendarEngine::new();
 
-    for year in 2000..2090 {
+    for year in 1975..2100 {
         for month in 1..=12 {
             let bs_month = BsMonth::from_u8(month).unwrap();
             let days_in_month = engine.calendar().get_month_days(year, bs_month).unwrap();
@@ -142,20 +178,25 @@ fn test_month_boundaries() {
 fn test_year_boundaries() {
     let engine = CalendarEngine::new();
 
-    // Test first supported year (2000 BS)
-    let first_bs = BsDate::new(2000, 1, 1).unwrap();
+    // Test first supported year (1975 BS)
+    let first_bs = BsDate::new(1975, 1, 1).unwrap();
     assert!(engine.bs_to_gregorian(first_bs).is_ok());
 
-    // Test last supported year (2089 BS)
-    let last_bs = BsDate::new(2089, 12, 30).unwrap();
+    // Test last supported year (2100 BS)
+    let last_bs = BsDate::new(2100, 12, 30).unwrap();
     assert!(engine.bs_to_gregorian(last_bs).is_ok());
 
     // Note: BsDate::new doesn't validate year range, only day (1-32) and month (1-12)
     // Year validation happens during conversion
-    let high_year = BsDate::new(2100, 1, 1).unwrap();
+    let high_year = BsDate::new(2101, 1, 1).unwrap();
     assert!(
         engine.bs_to_gregorian(high_year).is_err(),
-        "Year 2100 should fail conversion"
+        "Year 2101 should fail conversion"
+    );
+    let low_year = BsDate::new(1974, 1, 1).unwrap();
+    assert!(
+        engine.bs_to_gregorian(low_year).is_err(),
+        "Year 1974 should fail conversion"
     );
 }
 

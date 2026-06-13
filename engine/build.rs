@@ -85,6 +85,70 @@ fn generate_calendar_data() {
             std::process::exit(1);
         }
     };
+    // The O(1) year lookup below indexes by (year - FIRST_YEAR), which
+    // requires the years array to be contiguous and ascending. Verify at
+    // build time so a data regression fails the build, not the lookup.
+    let year_numbers: Vec<u64> = years
+        .iter()
+        .map(|y| y["year"].as_u64().expect("year field must be integer"))
+        .collect();
+    let first_year = *year_numbers.first().expect("years array must not be empty");
+    for (i, &y) in year_numbers.iter().enumerate() {
+        if y != first_year + i as u64 {
+            println!("cargo:error={json_path}: years must be contiguous and ascending; found {y} at position {i} (expected {})", first_year + i as u64);
+            std::process::exit(1);
+        }
+    }
+
+    // Official status: prefer an explicit boolean in the data file; fall back
+    // to an exact version-suffix convention. (A bare substring match on
+    // "official" previously matched accidental occurrences.)
+    let is_official = data["official"].as_bool().unwrap_or_else(|| {
+        // Exact token at a name boundary ("official-..." / "...-official" /
+        // "official"), never a bare substring (which would match
+        // "unofficial").
+        version == "official"
+            || version.starts_with("official-")
+            || version.ends_with("-official")
+    });
+
+    // Internal-consistency audit: each year's month lengths must sum to the
+    // gap between its anchor and the next year's anchor. Known-bad years are
+    // surfaced as build warnings (a data correction is required to fix them).
+    {
+        use chrono::NaiveDate;
+        for w in years.windows(2) {
+            let (a, b) = (&w[0], &w[1]);
+            let anchor = |y: &serde_json::Value| {
+                NaiveDate::from_ymd_opt(
+                    y["first_baisakh"]["year"].as_i64().unwrap() as i32,
+                    y["first_baisakh"]["month"].as_u64().unwrap() as u32,
+                    y["first_baisakh"]["day"].as_u64().unwrap() as u32,
+                )
+                .unwrap()
+            };
+            let gap = (anchor(b) - anchor(a)).num_days();
+            let total: i64 = a["days_in_months"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|d| d.as_i64().unwrap())
+                .sum();
+            if gap != total {
+                println!(
+                    "cargo:warning=bs_calendar_data.json: BS {} months sum to {total} days but anchor gap to the next year is {gap} — data needs correction",
+                    a["year"]
+                );
+            }
+        }
+    }
+
+    rust_code.push_str(&format!(
+        "pub const CALENDAR_FIRST_YEAR: u16 = {first_year};\n"
+    ));
+    rust_code.push_str(&format!(
+        "pub const CALENDAR_IS_OFFICIAL: bool = {is_official};\n\n"
+    ));
     rust_code.push_str(&format!(
         "pub static CALENDAR_DATA: [YearData; {}] = [\n",
         years.len()
@@ -126,9 +190,9 @@ fn generate_calendar_data() {
     rust_code.push_str("        StaticCalendarProvider {}\n");
     rust_code.push_str("    }\n\n");
     rust_code.push_str("    fn get_year_data(&self, year: u16) -> Result<&'static YearData> {\n");
-    rust_code.push_str("        CALENDAR_DATA\n");
-    rust_code.push_str("            .iter()\n");
-    rust_code.push_str("            .find(|y| y.year == year)\n");
+    rust_code.push_str("        // O(1): years are contiguous from CALENDAR_FIRST_YEAR (verified at build time)\n");
+    rust_code.push_str("        year.checked_sub(CALENDAR_FIRST_YEAR)\n");
+    rust_code.push_str("            .and_then(|idx| CALENDAR_DATA.get(idx as usize))\n");
     rust_code.push_str("            .ok_or(BsCalendarError::CalendarDataNotFound(year))\n");
     rust_code.push_str("    }\n");
     rust_code.push_str("}\n\n");
@@ -165,7 +229,9 @@ fn generate_calendar_data() {
     rust_code.push_str("    }\n\n");
 
     rust_code.push_str("    fn has_year(&self, year: u16) -> bool {\n");
-    rust_code.push_str("        CALENDAR_DATA.iter().any(|y| y.year == year)\n");
+    rust_code.push_str("        year.checked_sub(CALENDAR_FIRST_YEAR)\n");
+    rust_code.push_str("            .map(|idx| (idx as usize) < CALENDAR_DATA.len())\n");
+    rust_code.push_str("            .unwrap_or(false)\n");
     rust_code.push_str("    }\n\n");
 
     rust_code.push_str("    fn version(&self) -> &str {\n");
@@ -173,7 +239,7 @@ fn generate_calendar_data() {
     rust_code.push_str("    }\n\n");
 
     rust_code.push_str("    fn is_official(&self) -> bool {\n");
-    rust_code.push_str("        CALENDAR_VERSION.contains(\"official\")\n");
+    rust_code.push_str("        CALENDAR_IS_OFFICIAL\n");
     rust_code.push_str("    }\n");
     rust_code.push_str("}\n");
 

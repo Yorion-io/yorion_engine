@@ -65,6 +65,9 @@ impl InstanceGenerator {
         let mut current_frame_start = rule.anchor;
         let mut count = 0u32;
 
+        // Safety guard against unbounded rules (no COUNT, no UNTIL, huge window).
+        const MAX_INSTANCES: usize = 10_000;
+
         // Determine maximum occurrences
         let max_count = rule.count.unwrap_or(u32::MAX);
 
@@ -121,9 +124,11 @@ impl InstanceGenerator {
                 Err(_) => break, // Can't advance further
             }
 
-            // Safety check
-            if instances.len() > 10000 {
-                break;
+            // Refuse to silently truncate: callers must bound the rule. A
+            // silent cap returned a clipped list indistinguishable from a
+            // complete one.
+            if instances.len() > MAX_INSTANCES {
+                return Err(BsCalendarError::InstanceLimitExceeded(MAX_INSTANCES));
             }
         }
 
@@ -455,10 +460,14 @@ impl InstanceGenerator {
 
     /// Advance a BS date by a number of months
     fn advance_months(&self, date: BsDate, months: i32) -> Result<BsDate> {
-        let mut year = date.year as i32;
+        let mut year = i32::from(date.year);
         let mut month = date.month.to_u8() as i32;
 
-        month += months;
+        month = month.checked_add(months).ok_or_else(|| {
+            BsCalendarError::ConversionError(format!(
+                "Month arithmetic overflow advancing {date} by {months} months"
+            ))
+        })?;
 
         // Handle month overflow/underflow
         while month > 12 {
@@ -472,161 +481,24 @@ impl InstanceGenerator {
 
         let new_month = BsMonth::from_u8(month as u8)?;
 
+        let year = u16::try_from(year).map_err(|_| BsCalendarError::InvalidYear(0))?;
+
         // Clamp day to valid range for new month
         self.conversion
-            .clamp_bs_date(year as u16, new_month, date.day)
+            .clamp_bs_date(year, new_month, date.day)
     }
 
     /// Advance a BS date by a number of years
     fn advance_years(&self, date: BsDate, years: i32) -> Result<BsDate> {
-        let new_year = (date.year as i32 + years) as u16;
+        // Checked arithmetic: silent `as u16` wraparound at the range edges
+        // previously produced a nonsense year instead of an error.
+        let new_year = i32::from(date.year)
+            .checked_add(years)
+            .and_then(|y| u16::try_from(y).ok())
+            .ok_or(BsCalendarError::InvalidYear(date.year))?;
 
         // Clamp day to valid range for new year/month
         self.conversion
             .clamp_bs_date(new_year, date.month, date.day)
-    }
-    /// Generate instances from a Tithi recurrence rule via heuristic search
-    ///
-    /// Optimized to skip non-matching days by estimating the time to the next target tithi.
-    ///
-    /// Calendar-intrinsic tithi exceptions are handled here by construction:
-    /// - A3 (tithi vriddhi / repeated tithi): a tithi that spans two sunrises matches on
-    ///   BOTH consecutive sunrise-days. The post-match `advance_days(1)` below keeps both —
-    ///   each is a genuine sunrise-day occurrence, so two instances on consecutive days is
-    ///   the *intended* result, not a duplicate.
-    /// - A4 (tithi kshaya / skipped tithi): a target tithi that never touches a sunrise that
-    ///   month simply never matches, so that cycle yields ZERO instances. This silent gap is
-    ///   correct by construction — it is a real astronomical absence, not a bug or an error.
-    pub fn generate_tithi_instances(
-        &self,
-        rule: &crate::domain::recurrence::TithiRecurrenceRule,
-        start: BsDate,
-        end: BsDate,
-        astro: &crate::services::AstronomicalService,
-    ) -> Result<Vec<BsDate>> {
-        rule.validate()?;
-
-        let mut instances = Vec::new();
-        let mut current = {
-            if rule.anchor > start {
-                rule.anchor
-            } else {
-                start
-            }
-        };
-
-        let mut count = 0u32;
-        let max_count = rule.count.unwrap_or(u32::MAX);
-
-        // Loop until we exceed end date
-        while current <= end {
-            // Check limits
-            if count >= max_count {
-                break;
-            }
-            if let Some(until) = rule.until {
-                if current > until {
-                    break;
-                }
-            }
-
-            // 1. Calculate Tithi for the current day
-            let gregorian = self.conversion.bs_to_gregorian(current)?;
-            let location = crate::domain::tithi::Location::kathmandu();
-
-            // Using calculate_tithi_for_date (sunrise)
-            let current_tithi = astro.calculate_tithi_for_date(gregorian, &location)?;
-
-            // 2. Check if it matches
-            if rule.matches_tithi(current_tithi) {
-                // Apply date filters if any
-                if self.matches_tithi_date_filters(&current, rule)? {
-                    instances.push(current);
-                    count += 1;
-                }
-
-                // Jump at least 1 day, or heuristic for next occurrence
-                // If the rule is for specific tithi (e.g. Ekadashi), recurrence is roughly cyclic
-                // But we just matched it, so next match is likely far away (unless consecutive days match same tithi, which is possible)
-                // Safest small jump is 1 day to catch consecutive matches (Kshay/Vriddhi tithi effects)
-                // But if we want speed, we can check if the *next* day also matches.
-                // For now, strict correctness: jump 1 day.
-                // Optimization: If we matched, we can maybe jump ~14 days if it's a specific Paksha/Tithi rule,
-                // but "Every Ekadashi" is ~15 days.
-                // Let's keep simple safe jump=1 for match case to be correct with Kshaya/Vriddhi.
-                current = self.advance_days(current, 1)?;
-                continue;
-            }
-
-            // 3. Heuristic Jumping (Optimization)
-            // Calculate distance in "tithi indices" to the target
-            // Tithi cycle is 1-30 (Shukla 1-15, Krishna 1-15)
-            // 1 solar day approx 0.98 tithi days.
-
-            let mut nearest_dist = 30u8;
-            let current_idx = current_tithi.index_1_to_30();
-
-            for &target in &rule.by_tithi {
-                let target_idx = target.index_1_to_30();
-
-                let dist = if target_idx >= current_idx {
-                    target_idx - current_idx
-                } else {
-                    (30 - current_idx) + target_idx
-                };
-
-                nearest_dist = nearest_dist.min(dist);
-
-                // Special handling for dual-paksha rules (like Ekadashi):
-                // If rule ignores paksha, we have another target at (target_idx + 15) % 30
-                let is_any_paksha =
-                    rule.paksha_filter.is_none() && !target.is_purnima() && !target.is_amavasya();
-                if is_any_paksha {
-                    let alt_target_idx = (target_idx + 15 - 1) % 30 + 1;
-                    let alt_dist = if alt_target_idx >= current_idx {
-                        alt_target_idx - current_idx
-                    } else {
-                        (30 - current_idx) + alt_target_idx
-                    };
-                    nearest_dist = nearest_dist.min(alt_dist);
-                }
-            }
-
-            let jump_days = if nearest_dist > 2 {
-                // Heuristic: jump slightly less than distance to be safe
-                // (moon can speed up, tithis can be skipped)
-                (nearest_dist as f32 * 0.9) as i32
-            } else {
-                1
-            };
-
-            current = self.advance_days(current, jump_days.max(1))?;
-        }
-
-        Ok(instances)
-    }
-
-    fn matches_tithi_date_filters(
-        &self,
-        date: &BsDate,
-        rule: &crate::domain::recurrence::TithiRecurrenceRule,
-    ) -> Result<bool> {
-        // Check BYMONTH filter
-        if let Some(ref months) = rule.by_month {
-            if !months.contains(&date.month) {
-                return Ok(false);
-            }
-        }
-
-        // A5 (adhik / leap lunar month): this LEGACY heuristic path does NOT honour
-        // `rule.skip_adhik` — detecting an adhik month needs an expensive astronomical
-        // check that is not done here, so a tithi rule can fire one extra time inside
-        // an adhik month. NOTE: the engine's primary tithi path
-        // (`services::tithi_generator::TithiInstanceGenerator`, wired into
-        // `CalendarEngine`) DOES implement `skip_adhik` (see its `is_adhik` /
-        // `adhik_matches` handling). This method is the secondary path and is left
-        // unimplemented for adhik on purpose; the flag is accepted but has no effect here.
-
-        Ok(true)
     }
 }

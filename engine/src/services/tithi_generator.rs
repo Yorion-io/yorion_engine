@@ -131,7 +131,7 @@ impl TithiInstanceGenerator {
                 //
                 // The cache expires at the *next* Amavasya (when the next lunar month begins).
                 let prev_amavasya_jd = self.astronomical_service.find_prev_amavasya(jd)?;
-                let prev_amavasya_dt = self.jd_to_utc(prev_amavasya_jd);
+                let prev_amavasya_dt = crate::services::astronomical::jd_to_datetime(prev_amavasya_jd)?;
                 let prev_amavasya_bs = self
                     .conversion_service
                     .gregorian_to_bs(prev_amavasya_dt.date_naive())?;
@@ -196,43 +196,6 @@ impl TithiInstanceGenerator {
         }
 
         Ok(instances)
-    }
-
-    /// Helper to convert JD to DateTime<Utc>
-    fn jd_to_utc(&self, jd: f64) -> chrono::DateTime<chrono::Utc> {
-        let jd = jd + 0.5;
-        let z = jd.floor();
-        let f = jd - z;
-
-        let a = if z < 2299161.0 {
-            z
-        } else {
-            let alpha = ((z - 1867216.25) / 36524.25).floor();
-            z + 1.0 + alpha - (alpha / 4.0).floor()
-        };
-
-        let b = a + 1524.0;
-        let c = ((b - 122.1) / 365.25).floor();
-        let d = (365.25 * c).floor();
-        let e = ((b - d) / 30.6001).floor();
-
-        let day = (b - d - (30.6001 * e).floor() + f).floor();
-        let month = if e < 14.0 { e - 1.0 } else { e - 13.0 };
-        let year = if month > 2.0 { c - 4716.0 } else { c - 4715.0 };
-
-        let h = (f * 24.0).floor();
-        let m = ((f * 24.0 - h) * 60.0).floor();
-        let s = (((f * 24.0 - h) * 60.0 - m) * 60.0).floor();
-
-        let naive_date = chrono::NaiveDate::from_ymd_opt(year as i32, month as u32, day as u32)
-            .unwrap_or(chrono::NaiveDate::from_ymd_opt(2000, 1, 1).unwrap());
-        let naive_time = chrono::NaiveTime::from_hms_opt(h as u32, m as u32, s as u32)
-            .unwrap_or(chrono::NaiveTime::from_hms_opt(0, 0, 0).unwrap());
-
-        chrono::DateTime::<chrono::Utc>::from_naive_utc_and_offset(
-            naive_date.and_time(naive_time),
-            chrono::Utc,
-        )
     }
 
     /// Helper to increment one day in BS

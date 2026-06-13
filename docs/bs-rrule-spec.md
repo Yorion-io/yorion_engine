@@ -370,7 +370,7 @@ Two parsers will agree on the **meaning** of a BS-RRULE, but the **actual dates*
 
 Therefore, for reproducible results, an implementation MUST document:
 
-- The BS calendar data range it supports (e.g. BS 2000–2090).
+- The BS calendar data range it supports (e.g. BS 1975–2100).
 - The conversion data source/version.
 - The reference location and timezone used for tithi computation (commonly Kathmandu, 27.7172°N 85.3240°E, UTC+05:45).
 

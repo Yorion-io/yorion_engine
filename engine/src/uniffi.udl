@@ -67,6 +67,8 @@ interface CalendarEngine {
   string get_tithi_name(Tithi tithi, Language lang);
   string get_zodiac_name(ZodiacSign zodiac, Language lang);
   string get_nakshatra_name(Nakshatra nakshatra, Language lang);
+  string get_yoga_name(Yoga yoga, Language lang);
+  string get_karana_name(Karana karana, Language lang);
 };
 
 // Data structures
@@ -108,6 +110,8 @@ dictionary DailyAstroInfo {
   ZodiacSign sun_sign;
   ZodiacSign moon_sign;
   Nakshatra nakshatra;
+  Yoga yoga;
+  Karana karana;
   boolean is_overridden;
 };
 
@@ -121,6 +125,8 @@ dictionary CalendarDay {
   ZodiacSign sun_sign;
   ZodiacSign moon_sign;
   Nakshatra nakshatra;
+  Yoga yoga;
+  Karana karana;
   boolean is_overridden;
 };
 
@@ -224,6 +230,14 @@ enum Nakshatra {
   "PurvaBhadrapada",
   "UttaraBhadrapada",
   "Revati",
+};
+
+enum Yoga {
+  "Vishkambha", "Priti", "Ayushman", "Saubhagya", "Shobhana", "Atiganda", "Sukarman", "Dhriti", "Shula", "Ganda", "Vriddhi", "Dhruva", "Vyaghata", "Harshana", "Vajra", "Siddhi", "Vyatipata", "Variyan", "Parigha", "Shiva", "Siddha", "Sadhya", "Shubha", "Shukla", "Brahma", "Indra", "Vaidhriti",
+};
+
+enum Karana {
+  "Bava", "Balava", "Kaulava", "Taitila", "Gara", "Vanija", "Vishti", "Shakuni", "Chatushpada", "Naga", "Kimstughna",
 };
 
 enum BsFrequency {

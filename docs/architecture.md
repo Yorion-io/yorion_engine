@@ -103,7 +103,7 @@ There is no closed-form formula for BS↔AD conversion. The BS calendar is a sol
 
 ### Anchor Data
 
-`src/adapters/static_calendar.rs` contains a table of anchor points, one per BS year from approximately BS 2000 to BS 2090:
+`src/adapters/static_calendar.rs` contains a table of anchor points, one per BS year from BS 1975 to BS 2100:
 
 ```
 BS 2079 Baishakh 1  =  AD 2022 April 14
@@ -313,12 +313,12 @@ Benchmarks run with `cargo bench` on an **Apple M5, 10-core, 16 GB RAM** (native
 
 | Operation | Time | Notes |
 |---|---|---|
-| `bs_to_gregorian` | 76 ns | Linear scan of 91-entry static array |
+| `bs_to_gregorian` | 76 ns | O(1) index lookup into a 126-entry static array |
 | `gregorian_to_bs` | 56 ns | Same array, reverse lookup |
 | `get_tithi` (override hit) | 187 ns | Hits the 176-entry correction table; skips all astronomy |
 | `get_tithi` (override miss) | 200 ns | Falls through to VSOP87 + ELP-2000/82 |
 | `get_sunrise` | 153 ns | suncalc only; no planet positions |
-| `get_daily_astro_info` | 9.7 µs | Tithi + sun sign + moon sign + nakshatra in one pass |
+| `get_daily_astro_info` | 9.7 µs | Tithi + sun sign + moon sign + nakshatra + yoga + karana in one pass |
 
 ### Month calendar
 
@@ -369,7 +369,7 @@ cd engine && cargo bench --bench engine_perf
 
 ### Custom calendar data provider
 
-Implement `CalendarProvider` to supply your own BS month-length table (e.g. to extend coverage beyond BS 2090):
+Implement `CalendarProvider` to supply your own BS month-length table (e.g. to extend coverage beyond BS 2100):
 
 ```rust
 use yorion_engine::ports::CalendarProvider;
@@ -383,7 +383,7 @@ impl CalendarProvider for MyProvider {
     fn get_first_baisakh(&self, year: u16) -> Result<NaiveDate> { … }
     fn get_year_months(&self, year: u16) -> Result<[u8; 12]> { … }
     fn has_year(&self, year: u16) -> bool { … }
-    fn version(&self) -> &str { "custom-2090-2110" }
+    fn version(&self) -> &str { "custom-2100-2120" }
     fn is_official(&self) -> bool { false }
 }
 ```

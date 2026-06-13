@@ -120,40 +120,41 @@ fn test_chaitra_last_day_to_next_baisakh_is_one_day() {
 }
 
 // ============================================================================
-// Data range boundaries: BS 2000 and BS 2089 must convert successfully
+// Data range boundaries: BS 1975 and BS 2100 must convert successfully
 // ============================================================================
 
 #[test]
 fn test_data_range_lower_boundary() {
     let service = create_test_service();
 
-    let bs = BsDate::new(2000, 1, 1).unwrap();
+    // First represented year is BS 1975.
+    let bs = BsDate::new(1975, 1, 1).unwrap();
     let ad = service.bs_to_gregorian(bs).unwrap();
     // Round-trip must hold at the lower boundary
     let back = service.gregorian_to_bs(ad).unwrap();
-    assert_eq!(back, bs, "round-trip at lower boundary BS 2000 Baisakh 1");
+    assert_eq!(back, bs, "round-trip at lower boundary BS 1975 Baisakh 1");
 }
 
 #[test]
 fn test_data_range_upper_boundary() {
     let service = create_test_service();
 
-    // Supported data covers BS 2000–2090. The last fully represented year is 2090
+    // Supported data covers BS 1975–2100. The last fully represented year is 2100
     // (its Baisakh 1 anchor is known, so the year is addressable).
-    let bs = BsDate::new(2090, 1, 1).unwrap();
+    let bs = BsDate::new(2100, 1, 1).unwrap();
     let ad = service.bs_to_gregorian(bs).unwrap();
     let back = service.gregorian_to_bs(ad).unwrap();
-    assert_eq!(back, bs, "round-trip at upper boundary BS 2090 Baisakh 1");
+    assert_eq!(back, bs, "round-trip at upper boundary BS 2100 Baisakh 1");
 }
 
 #[test]
 fn test_year_beyond_range_errors() {
     let service = create_test_service();
 
-    let bs = BsDate::new(2095, 1, 1).unwrap();
+    let bs = BsDate::new(2101, 1, 1).unwrap();
     assert!(
         service.bs_to_gregorian(bs).is_err(),
-        "year 2095 is outside supported range and must error"
+        "year 2101 is outside supported range and must error"
     );
 }
 

@@ -34,11 +34,45 @@ YorionEngine solves all three in one library that compiles to native code, WASM 
 
 | Capability | Range / Detail |
 |---|---|
-| BS ↔ AD conversion | BS 2000–2090 (AD 1943–2033) |
-| Tithi accuracy | Validated against official Nepali Panchanga almanac through BS 2083 |
+| BS ↔ AD conversion | BS 1975–2100 (AD 1918–2044), O(1) table lookup |
+| Panchanga angas | All five: tithi, vara, nakshatra, yoga, karana |
+| Tithi accuracy | Validated against official Nepali Panchanga almanac through BS 2083 (`TITHI_VERIFIED_THROUGH_BS`); later years are unverified astronomical output |
 | Tithi exception overrides | CSV-driven corrections baked in at build time |
-| Astronomical | Sunrise/sunset + zodiac + nakshatra for any lat/lon |
+| Tithi end times | `get_tithi_end` exposes the transition instant |
+| Ayanamsa | Lahiri (Chitrapaksha), computed per date |
+| Astronomical | Sunrise/sunset + zodiac + nakshatra + yoga + karana for any lat/lon |
 | Recurrence | BS-solar, AD-solar, panchanga-lunar |
+
+---
+
+## Calendar data source
+
+BS month lengths are **not derivable from a formula** — they vary year to year and must come from a published table. The embedded table in [`engine/data/bs_calendar_data.json`](engine/data/bs_calendar_data.json) covers **BS 1975–2100** and, for each year, stores:
+
+- the **1 Baisakh anchor** — the Gregorian date of the BS new year, and
+- the **12 month lengths** (Baisakh … Chaitra, each 29–32 days).
+
+**Authoritative source.** The full table — all 126 years (BS 1975–2100) — is generated from the [`nepali-datetime`](https://github.com/opensource-nepal/nepali_datetime) reference table (Python `opensource-nepal/nepali_datetime`), spot-checked against [Hamro Patro](https://www.hamropatro.com/calendar). Each anchor is derived by cumulative day-summing from the reference's epoch (1 Baisakh 1975 = 1918-04-13); the derived anchors reproduce known dates exactly (e.g. 1 Baisakh 2081 = 2024-04-13).
+
+**Consistency is enforced, not assumed.** Every year's 12 month lengths must sum to exactly the number of days between its anchor and the next year's anchor. This invariant is checked in two places:
+
+- at **build time** — `build.rs` emits a compile warning for any year whose months don't match its anchor gap;
+- at **test time** — `month_lengths_match_anchor_gaps` (in `tests/property_invariants.rs`) asserts it across the whole range, and a full-range BS↔AD↔BS round-trip property test guards every valid date.
+
+When extending the table beyond BS 2100, add new years from the same reference and let those checks confirm internal consistency.
+
+### Two separate coverage limits
+
+Date conversion and tithi accuracy do **not** extend together:
+
+| Layer | Covered through | Self-extending? |
+|---|---|---|
+| BS ↔ AD **date conversion** | BS 2100 | n/a — fixed table |
+| **Tithi** (panchanga) accuracy | BS 2083 (`TITHI_VERIFIED_THROUGH_BS`) | **No — needs a yearly update** |
+
+Tithi values come from astronomical calculation corrected by `engine/data/tithi_exceptions.csv`, which is validated against published almanac files that currently stop at BS 2083. Beyond that year, tithis are raw astronomical output with no almanac correction.
+
+**Yearly maintenance:** when a new official patro is published, add its reference almanac CSV, regenerate the overrides, and bump `TITHI_VERIFIED_THROUGH_BS`. This is the calendar's only recurring data task — full step-by-step runbook in [CONTRIBUTING.md → Yearly maintenance](CONTRIBUTING.md#yearly-maintenance-refreshing-tithi-data-when-a-new-almanac-is-published).
 
 ---
 
@@ -158,7 +192,7 @@ X-CALENDAR=PANCHANGA;FREQ=MONTHLY;DTSTART=20810101;X-TITHI=EKADASHI;X-SKIPADHIK=
 
 The spec is language- and platform-agnostic — any developer can implement a conformant parser from it alone. Ready-to-use rules for 53 Nepal festivals (208 verified tests) are included.
 
-**[Full specification → docs/bs-rrule-spec.md](docs/bs-rrule-spec.md)**
+**[Full specification → docs/bs-rrule-spec.md](docs/bs-rrule-spec.md)** · **[Festival reference → docs/festivals.md](docs/festivals.md)**
 
 ---
 

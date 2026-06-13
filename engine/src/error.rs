@@ -96,6 +96,11 @@ pub enum BsCalendarError {
 
     #[error("Astronomical calculation failed: {0}")]
     AstronomicalError(String),
+
+    #[error(
+        "Recurrence expansion exceeded the safety limit of {0} instances; add COUNT or UNTIL to bound the rule"
+    )]
+    InstanceLimitExceeded(usize),
 }
 
 impl BsCalendarError {

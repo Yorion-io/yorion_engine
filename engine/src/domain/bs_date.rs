@@ -4,7 +4,7 @@ use std::fmt;
 
 /// Bikram Sambat month enumeration
 #[cfg_attr(feature = "wasm", wasm_bindgen::prelude::wasm_bindgen)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum BsMonth {
     Baisakh = 1,
     Jestha = 2,
@@ -124,7 +124,7 @@ impl TryFrom<u8> for BsMonth {
     feature = "wasm",
     wasm_bindgen::prelude::wasm_bindgen(getter_with_clone)
 )]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct BsDate {
     pub year: u16,
     pub month: BsMonth,
@@ -132,7 +132,15 @@ pub struct BsDate {
 }
 
 impl BsDate {
-    /// Create a new BS date with validation
+    /// Create a new BS date with **structural** validation only.
+    ///
+    /// Checks that the month is 1-12 and the day is 1-32. It does **not**
+    /// check the day against the actual length of that BS month (month
+    /// lengths vary year to year and require calendar data). A structurally
+    /// valid but non-existent date (e.g. day 32 in a 30-day month) is
+    /// rejected later by any conversion or generation call. For full
+    /// validation against the embedded calendar table use
+    /// [`crate::core_api::CalendarEngine::checked_bs_date`].
     pub fn new(year: u16, month: u8, day: u8) -> Result<Self> {
         let month = BsMonth::from_u8(month)?;
 
@@ -144,7 +152,9 @@ impl BsDate {
         Ok(BsDate { year, month, day })
     }
 
-    /// Create from BsMonth enum
+    /// Create from BsMonth enum with **structural** validation only.
+    ///
+    /// See [`BsDate::new`] for what is and is not validated.
     pub fn from_parts(year: u16, month: BsMonth, day: u8) -> Result<Self> {
         if !(1..=32).contains(&day) {
             return Err(BsCalendarError::InvalidDay(day, month.to_u8()));
