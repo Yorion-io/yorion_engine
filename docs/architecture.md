@@ -291,9 +291,9 @@ Property tests (proptest): `∀ bs_date ∈ valid range: gregorian_to_bs(bs_to_g
 ## Distribution
 
 The engine is distributed as a compiled WASM binary via GitHub Releases:
-- `bs_calendar_core.js` — JS glue code (NodeJS target)
-- `bs_calendar_core_bg.wasm` — Actual WASM binary
-- `bs_calendar_core.d.ts` — TypeScript declarations
+- `yorion_engine.js` — JS glue code (NodeJS target)
+- `yorion_engine_bg.wasm` — Actual WASM binary
+- `yorion_engine.d.ts` — TypeScript declarations
 
 Backend and frontend both download these via:
 ```bash
