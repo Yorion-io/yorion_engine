@@ -4,6 +4,11 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'engine/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/release.yml'
 
 env:
   CARGO_TERM_COLOR: always
@@ -365,7 +370,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add engine/Cargo.toml
           git commit -m "chore(release): bump version to ${VERSION}" || echo "No changes to commit"
-          git tag "v${VERSION}"
+          git tag "v${VERSION}" || echo "Tag v${VERSION} already exists, skipping"
           git push origin main --tags
 
       - name: Create GitHub Release
