@@ -143,3 +143,50 @@ fn engine_matches_almanac() {
         "engine diverges from almanac: {conv} conversion + {tit} tithi mismatch(es) over {rows_checked} rows (see report above)"
     );
 }
+
+// ── Guards for TITHI_VERIFIED_THROUGH_BS ────────────────────────────────────
+// The verified boundary is a human-maintained assertion, deliberately NOT derived
+// from the override CSV (an exception-free year contributes zero rows yet is still
+// verified). These guards don't DERIVE the boundary — they assert it can never
+// silently CONTRADICT the data: it must cover every year we ship corrections or
+// almanac ground truth for. They fail the build/CI if someone bumps the data
+// without bumping the const.
+
+/// The canonical override source (the same file build.rs compiles into TITHI_OVERRIDES).
+const TITHI_EXCEPTIONS_CSV: &str = include_str!("../data/tithi_exceptions.csv");
+
+/// Max BS year that appears in column 0 (BS Date) of the overrides CSV.
+fn max_csv_override_bs_year() -> u16 {
+    TITHI_EXCEPTIONS_CSV
+        .lines()
+        .skip(1) // header
+        .filter_map(|line| line.split(',').next())
+        .filter_map(|bs| bs.split('-').next())
+        .filter_map(|y| y.trim().parse::<u16>().ok())
+        .max()
+        .unwrap_or(0)
+}
+
+#[test]
+fn verified_boundary_covers_override_data() {
+    let max_override = max_csv_override_bs_year();
+    assert!(
+        yorion_engine::core_api::TITHI_VERIFIED_THROUGH_BS >= max_override,
+        "TITHI_VERIFIED_THROUGH_BS ({}) is below the max BS year with tithi overrides ({}). \
+         Override rows exist for a year not marked verified — bump the const.",
+        yorion_engine::core_api::TITHI_VERIFIED_THROUGH_BS,
+        max_override,
+    );
+}
+
+#[test]
+fn verified_boundary_covers_almanac_ground_truth() {
+    let max_almanac = YEARS.iter().map(|(y, _)| *y).max().unwrap_or(0);
+    assert!(
+        yorion_engine::core_api::TITHI_VERIFIED_THROUGH_BS >= max_almanac,
+        "TITHI_VERIFIED_THROUGH_BS ({}) is below the latest almanac-validated year ({}). \
+         A year is validated against the almanac but not marked verified — bump the const.",
+        yorion_engine::core_api::TITHI_VERIFIED_THROUGH_BS,
+        max_almanac,
+    );
+}

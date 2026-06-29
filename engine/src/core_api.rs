@@ -15,11 +15,28 @@ use crate::prelude::*;
 use chrono::NaiveDate;
 use std::sync::Arc;
 
-/// Last BS year for which tithi output has been validated against the
-/// official Nepali Panchanga almanac (and for which override corrections
-/// exist). Beyond this year tithi values are raw astronomical computation
-/// with no almanac verification — treat them as provisional.
+/// Last BS year whose tithi output has been validated against the official Nepali
+/// Panchanga almanac. Instances in years beyond this are raw astronomical
+/// computation — provisional, and may change once that year's official calendar
+/// is published.
+///
+/// This is a deliberate HUMAN-MAINTAINED assertion and is intentionally NOT
+/// derived from `data/tithi_exceptions.csv`. The CSV only holds *corrections*
+/// (where computed tithi != official); a year can be fully verified yet contribute
+/// ZERO rows because every computed tithi already matched the almanac. So the
+/// CSV's max year is a LOWER bound, never the boundary — do not auto-derive this
+/// from it (that would wrongly mark exception-free verified years as provisional).
+///
+/// To advance the boundary: verify the new year against the official almanac, add
+/// any needed correction rows to `tithi_exceptions.csv` (possibly none), then bump
+/// this const and release a new WASM. The `tithi_verified_boundary_*` tests guard
+/// that this never drops below the CSV's data.
 pub const TITHI_VERIFIED_THROUGH_BS: u16 = 2083;
+
+/// Calendar-version label stamped on every generated instance. The label is
+/// constant; the meaningful axis is `is_official`, derived per-instance from the
+/// instance's BS year vs [`TITHI_VERIFIED_THROUGH_BS`].
+pub const CALENDAR_VERSION: &str = "v1";
 
 /// Core calendar engine with stable API
 pub struct CalendarEngine {
@@ -418,7 +435,12 @@ impl CalendarEngine {
         let end_ad = self.bs_to_gregorian(end)?;
 
         let mut instances = Vec::new();
-        let version = CalendarVersion::official("v1".to_string());
+        // Placeholder threaded into instance construction; its `is_official` is a
+        // don't-care because the authoritative, per-instance official/provisional
+        // status is stamped in a single pass below (based on each instance's own BS
+        // year vs TITHI_VERIFIED_THROUGH_BS). Defaults to provisional so that if any
+        // instance ever escapes the stamping pass it errs on the safe side.
+        let version = CalendarVersion::projected(CALENDAR_VERSION.to_string());
 
         for event in events {
             match event.recurrence {
@@ -475,6 +497,17 @@ impl CalendarEngine {
                     instances.extend(tithi_instances);
                 }
             }
+        }
+
+        // Stamp each instance's calendar version from ITS OWN BS year. Tithi/BS
+        // dates are only officially confirmed through TITHI_VERIFIED_THROUGH_BS;
+        // beyond that they are astronomically computed and must be marked
+        // provisional (is_official = false) so consumers can recompute them once
+        // the official calendar for that year is released.
+        for instance in &mut instances {
+            let is_official = instance.bs_date.year <= TITHI_VERIFIED_THROUGH_BS;
+            instance.calendar_version =
+                CalendarVersion::new(CALENDAR_VERSION.to_string(), is_official);
         }
 
         Ok(instances)

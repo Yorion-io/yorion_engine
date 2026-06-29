@@ -114,6 +114,15 @@ pub fn gregorian_to_bs(year: i32, month: u32, day: u32) -> std::result::Result<B
         .map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
+/// The last BS year for which tithi output is officially verified against the
+/// Nepali Panchanga almanac. Instances beyond this year are astronomically
+/// computed (provisional) and may change once the official calendar is released.
+/// Consumers use this to decide which pushed instances need later recomputation.
+#[wasm_bindgen]
+pub fn tithi_verified_through_bs() -> u16 {
+    crate::core_api::TITHI_VERIFIED_THROUGH_BS
+}
+
 #[wasm_bindgen]
 pub fn get_tithi(year: i32, month: u32, day: u32) -> std::result::Result<Tithi, JsValue> {
     let engine = get_engine();
