@@ -182,6 +182,9 @@ pub struct CalendarDay {
     pub yoga: Yoga,
     pub karana: Karana,
     pub is_overridden: bool,
+    pub is_weekend: bool,
+    pub is_holiday: bool,
+    pub holiday_name: String,
 }
 
 impl From<CoreCalendarDay> for CalendarDay {
@@ -199,6 +202,9 @@ impl From<CoreCalendarDay> for CalendarDay {
             yoga: d.yoga.into(),
             karana: d.karana.into(),
             is_overridden: d.is_overridden,
+            is_weekend: d.is_weekend,
+            is_holiday: d.is_holiday,
+            holiday_name: d.holiday_name,
         }
     }
 }

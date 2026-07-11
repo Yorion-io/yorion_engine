@@ -5,6 +5,7 @@ use std::path::Path;
 fn main() {
     generate_calendar_data();
     generate_tithi_overrides();
+    generate_holidays();
 
     // Generate UniFFI scaffolding when feature is enabled
     #[cfg(feature = "uniffi-bindings")]
@@ -310,4 +311,94 @@ fn generate_tithi_overrides() {
         "cargo:warning=Generated {} tithi overrides",
         override_entries.len()
     );
+}
+
+/// Bake `data/holidays.csv` (the Nepal government/festival gazette list) into a
+/// static `HOLIDAYS` array keyed by Gregorian date. Weekends are computed at
+/// runtime and deliberately NOT in this table. Regenerate the CSV with
+/// `tools/tools/consolidators/generate_holidays.js` when a new BS year is
+/// published, then bump `HOLIDAYS_VERIFIED_THROUGH_BS` in core_api.rs.
+fn generate_holidays() {
+    println!("cargo:rerun-if-changed=data/holidays.csv");
+    let holidays_path = "data/holidays.csv";
+
+    let mut code = String::new();
+    code.push_str("// Auto-generated from holidays.csv — DO NOT EDIT MANUALLY\n\n");
+
+    let mut entries = Vec::new();
+
+    if let Ok(content) = fs::read_to_string(holidays_path) {
+        for line in content.lines().skip(1) {
+            // CSV: AD Date,Name (EN),Name (NE). Names may be quoted; split on
+            // the first two unquoted commas only.
+            let fields = parse_csv_line(line);
+            if fields.len() < 3 {
+                continue;
+            }
+            let ad_date_str = fields[0].trim();
+            let name_en = &fields[1];
+            let name_ne = &fields[2];
+            if name_en.is_empty() {
+                continue;
+            }
+            if let Ok(date) = chrono::NaiveDate::parse_from_str(ad_date_str, "%Y-%m-%d") {
+                use chrono::Datelike;
+                entries.push(format!(
+                    "    (({}, {}, {}), {:?}, {:?}),",
+                    date.year(),
+                    date.month(),
+                    date.day(),
+                    name_en,
+                    name_ne
+                ));
+            }
+        }
+    } else {
+        println!("cargo:warning=data/holidays.csv not found — HOLIDAYS will be empty");
+    }
+
+    code.push_str(&format!(
+        "pub static HOLIDAYS: [((i32, u8, u8), &str, &str); {}] = [\n",
+        entries.len()
+    ));
+    for entry in &entries {
+        code.push_str(entry);
+        code.push('\n');
+    }
+    code.push_str("];\n");
+
+    let out_dir = env::var("OUT_DIR").unwrap();
+    let dest = Path::new(&out_dir).join("holidays_data.rs");
+    fs::write(&dest, code).expect("Failed to write generated holidays_data.rs");
+
+    println!("cargo:warning=Generated {} holidays", entries.len());
+}
+
+/// Minimal CSV line parser (handles double-quoted fields containing commas),
+/// used to split holiday name columns that may embed commas.
+fn parse_csv_line(line: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut cur = String::new();
+    let mut in_quotes = false;
+    let mut chars = line.chars().peekable();
+    while let Some(c) = chars.next() {
+        if in_quotes {
+            if c == '"' && chars.peek() == Some(&'"') {
+                cur.push('"');
+                chars.next();
+            } else if c == '"' {
+                in_quotes = false;
+            } else {
+                cur.push(c);
+            }
+        } else if c == '"' {
+            in_quotes = true;
+        } else if c == ',' {
+            out.push(std::mem::take(&mut cur));
+        } else {
+            cur.push(c);
+        }
+    }
+    out.push(cur);
+    out
 }

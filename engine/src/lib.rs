@@ -59,13 +59,15 @@ uniffi::include_scaffolding!("uniffi");
 
 /// Prelude module for convenient imports
 pub mod prelude {
-    pub use crate::adapters::{StaticCalendarProvider, StaticTithiOverrideProvider};
+    pub use crate::adapters::{
+        StaticCalendarProvider, StaticHolidayProvider, StaticTithiOverrideProvider,
+    };
     pub use crate::domain::{
         BsDate, BsFrequency, BsMonth, BsRecurrenceRule, CalendarVersion, EventInstance, Karana,
         Location, Nakshatra, Paksha, Tithi, TithiRecurrenceRule, Yoga, ZodiacSign,
     };
     pub use crate::error::{BsCalendarError, Result};
-    pub use crate::ports::{CalendarProvider, TithiOverrideProvider};
+    pub use crate::ports::{CalendarProvider, Holiday, HolidayProvider, TithiOverrideProvider};
     pub use crate::services::{
         AstronomicalService, ConversionService, InstanceGenerator, TithiInstanceGenerator,
     };

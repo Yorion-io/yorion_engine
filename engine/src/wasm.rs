@@ -22,6 +22,9 @@ pub struct WasmCalendarDay {
     pub yoga: Yoga,
     pub karana: Karana,
     pub is_overridden: bool,
+    pub is_weekend: bool,
+    pub is_holiday: bool,
+    pub holiday_name: String,
 }
 
 #[wasm_bindgen]
@@ -82,6 +85,9 @@ pub fn get_month_calendar_with_location(
             yoga: day.yoga,
             karana: day.karana,
             is_overridden: day.is_overridden,
+            is_weekend: day.is_weekend,
+            is_holiday: day.is_holiday,
+            holiday_name: day.holiday_name,
         })
         .collect();
 
@@ -121,6 +127,15 @@ pub fn gregorian_to_bs(year: i32, month: u32, day: u32) -> std::result::Result<B
 #[wasm_bindgen]
 pub fn tithi_verified_through_bs() -> u16 {
     crate::core_api::TITHI_VERIFIED_THROUGH_BS
+}
+
+/// The last BS year for which government/festival holiday data exists. Beyond
+/// this year `WasmCalendarDay.is_holiday` is always false (no data, not "no
+/// holidays") — surface it to users as "holidays not yet published". Weekends
+/// (`is_weekend`) remain correct for all years regardless of this boundary.
+#[wasm_bindgen]
+pub fn holidays_verified_through_bs() -> u16 {
+    crate::core_api::HOLIDAYS_VERIFIED_THROUGH_BS
 }
 
 #[wasm_bindgen]

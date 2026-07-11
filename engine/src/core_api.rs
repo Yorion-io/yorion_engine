@@ -38,12 +38,43 @@ pub const TITHI_VERIFIED_THROUGH_BS: u16 = 2083;
 /// instance's BS year vs [`TITHI_VERIFIED_THROUGH_BS`].
 pub const CALENDAR_VERSION: &str = "v1";
 
+/// Last BS year for which the government/festival holiday table (`data/holidays.csv`)
+/// carries data. Unlike tithi — which is computed for every year and merely
+/// *provisional* past its boundary — holidays are pure gazette data with no
+/// fallback computation, so beyond this year `CalendarDay::is_holiday` is always
+/// `false` because the data simply does not exist. UIs should present years past
+/// this as "holidays not yet published", not as a holiday-free calendar.
+///
+/// HUMAN-MAINTAINED: advancing it requires regenerating `data/holidays.csv` from
+/// the published gazette (via `tools/tools/consolidators/generate_holidays.js`)
+/// and releasing a new engine build. The `holidays_*` tests guard the boundary.
+pub const HOLIDAYS_VERIFIED_THROUGH_BS: u16 = 2083;
+
+/// First Gregorian date on which Sunday became a weekly government/bank holiday
+/// in Nepal (the 2082 two-day-weekend policy: Chaitra 23, 2082 = 2026-04-06).
+/// Before this, only Saturday was the weekly day off. This is a policy constant,
+/// deliberately a single source of truth so every platform binding agrees.
+const SUNDAY_WEEKEND_FROM: NaiveDate = match NaiveDate::from_ymd_opt(2026, 4, 6) {
+    Some(d) => d,
+    None => panic!("SUNDAY_WEEKEND_FROM is a valid date"),
+};
+
+/// Whether a Gregorian date is a weekly non-working day in Nepal.
+///
+/// Saturday (`day_of_week == 6`) is always off. Sunday (`day_of_week == 0`)
+/// counts only from [`SUNDAY_WEEKEND_FROM`] onward. Pure computation — correct
+/// for every year, independent of the gazette holiday table.
+pub fn is_weekend(day_of_week: u8, gregorian: NaiveDate) -> bool {
+    day_of_week == 6 || (day_of_week == 0 && gregorian >= SUNDAY_WEEKEND_FROM)
+}
+
 /// Core calendar engine with stable API
 pub struct CalendarEngine {
     pub(crate) conversion_service: Arc<ConversionService>,
     pub(crate) astronomical_service: Arc<AstronomicalService>,
     pub(crate) instance_generator: InstanceGenerator,
     pub(crate) tithi_instance_generator: TithiInstanceGenerator,
+    pub(crate) holiday_provider: StaticHolidayProvider,
 }
 
 impl CalendarEngine {
@@ -61,6 +92,7 @@ impl CalendarEngine {
             ),
             conversion_service,
             astronomical_service,
+            holiday_provider: StaticHolidayProvider::new(),
         }
     }
 
@@ -392,15 +424,18 @@ impl CalendarEngine {
                 .astronomical_service
                 .get_daily_astro_info_for_date(gregorian, &location)?;
 
+            let dow = {
+                use chrono::Datelike;
+                gregorian.weekday().num_days_from_sunday() as u8
+            };
+            let holiday = self.holiday_provider.get_holiday(gregorian, &location);
+
             days.push(CalendarDay {
                 bs_year: year,
                 bs_month: month,
                 bs_day: day,
                 gregorian_date: gregorian,
-                day_of_week: {
-                    use chrono::Datelike;
-                    gregorian.weekday().num_days_from_sunday() as u8
-                },
+                day_of_week: dow,
                 tithi: info.tithi,
                 sun_sign: info.sun_sign,
                 moon_sign: info.moon_sign,
@@ -408,6 +443,9 @@ impl CalendarEngine {
                 yoga: info.yoga,
                 karana: info.karana,
                 is_overridden: info.is_overridden,
+                is_weekend: is_weekend(dow, gregorian),
+                is_holiday: holiday.is_some(),
+                holiday_name: holiday.map(|h| h.name_en.to_string()).unwrap_or_default(),
             });
         }
 
@@ -534,6 +572,15 @@ pub struct CalendarDay {
     pub yoga: Yoga,
     pub karana: Karana,
     pub is_overridden: bool,
+    /// A weekly non-working day (Saturday always; Sunday from the 2082 two-day
+    /// weekend policy — see [`is_weekend`]). Computed, not from the gazette table.
+    pub is_weekend: bool,
+    /// A government/festival gazette holiday. `false` for BS years beyond
+    /// [`HOLIDAYS_VERIFIED_THROUGH_BS`] (no data), so callers must not read a
+    /// `false` there as "definitely not a holiday".
+    pub is_holiday: bool,
+    /// English name of the gazette holiday, or empty when `is_holiday` is false.
+    pub holiday_name: String,
 }
 
 /// Daily astronomical info bundled with sunrise/sunset times.
