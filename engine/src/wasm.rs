@@ -273,3 +273,51 @@ pub fn get_month_events(
     }
     Ok(arr)
 }
+
+/// Expand event instances across a multi-month BS range in a SINGLE pass.
+///
+/// Unlike [`get_month_events`], which is bounded to one BS month, this walks the
+/// whole `(from_year, from_month) ..= (to_year, to_month)` window in one call.
+/// This matters for cross-month recurrence semantics — notably `X-TAKE=FIRST`,
+/// which keeps only the first qualifying tithi occurrence *per BS year*. Calling
+/// month-by-month would reset that per-year state every month and defeat it, so
+/// callers that need take-first (festivals like Bijaya Dashami spanning
+/// Ashwin/Kartik) MUST use this range API rather than looping `get_month_events`.
+#[wasm_bindgen]
+pub fn get_events_in_range(
+    from_year: u16,
+    from_month: u8,
+    to_year: u16,
+    to_month: u8,
+    events_json: String,
+    location: &Location,
+) -> std::result::Result<js_sys::Array, JsValue> {
+    let engine = get_engine();
+    let events: Vec<crate::domain::event::Event> = serde_json::from_str(&events_json)
+        .map_err(|e| JsValue::from_str(&format!("Failed to parse events: {}", e)))?;
+
+    let start_date = crate::domain::BsDate::new(from_year, from_month, 1)
+        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+    let to_bs_month =
+        crate::domain::BsMonth::from_u8(to_month).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let days_in_end_month = engine
+        .calendar()
+        .get_month_days(to_year, to_bs_month)
+        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let end_date = crate::domain::BsDate::new(to_year, to_month, days_in_end_month)
+        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+    let instances = engine
+        .generate_event_instances(events, start_date, end_date, location.clone())
+        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+    let arr = js_sys::Array::new();
+    for instance in instances {
+        arr.push(
+            &serde_wasm_bindgen::to_value(&instance)
+                .map_err(|e| JsValue::from_str(&e.to_string()))?,
+        );
+    }
+    Ok(arr)
+}
