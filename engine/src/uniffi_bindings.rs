@@ -78,7 +78,14 @@ pub struct Location {
 
 impl From<Location> for CoreLocation {
     fn from(l: Location) -> Self {
-        CoreLocation::new(l.latitude, l.longitude, l.name, l.timezone_offset_mins)
+        // `CoreLocation::new` hard-codes `follow_nepal_social_calendar: false`,
+        // so building through it silently discarded the caller's choice — every
+        // FFI consumer (Swift/Kotlin/Flutter) got `is_holiday: false` for every
+        // day no matter what it passed. Carry the flag through explicitly; the
+        // reverse conversion below has always preserved it.
+        let mut core = CoreLocation::new(l.latitude, l.longitude, l.name, l.timezone_offset_mins);
+        core.follow_nepal_social_calendar = l.follow_nepal_social_calendar;
+        core
     }
 }
 
