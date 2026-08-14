@@ -75,10 +75,16 @@ build_android() {
     echo "❌ cargo-ndk not installed — 'cargo install cargo-ndk'" >&2
     return 1
   fi
-  cargo ndk --manifest-path "$ENGINE_DIR/Cargo.toml" \
-    -t arm64-v8a -t x86_64 \
-    -o "$PLUGIN_DIR/android/src/main/jniLibs" \
-    build --release --features uniffi-bindings
+  # cargo-ndk runs `cargo metadata` against the CWD before it delegates, and
+  # honours --manifest-path in neither position — so the only reliable fix is
+  # to invoke it from the crate directory. Output paths are absolutised first,
+  # since they are relative to the repo root.
+  local jni_out
+  jni_out="$(cd "$(dirname "$PLUGIN_DIR")" && pwd)/$(basename "$PLUGIN_DIR")/android/src/main/jniLibs"
+  ( cd "$ENGINE_DIR" && cargo ndk \
+      -t arm64-v8a -t x86_64 \
+      -o "$jni_out" \
+      build --release --features uniffi-bindings )
 
   cargo run --manifest-path "$ENGINE_DIR/Cargo.toml" --features uniffi-cli \
     --bin uniffi-bindgen -- generate "$ENGINE_DIR/src/uniffi.udl" \
