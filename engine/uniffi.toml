@@ -1,0 +1,5 @@
+[bindings.kotlin]
+# Without this, bindgen defaults the JNA library name to `uniffi_` + namespace,
+# but cargo builds `libyorion_engine.so` from [lib] name — so Android crashes
+# with UnsatisfiedLinkError on the first engine call.
+cdylib_name = "yorion_engine"
