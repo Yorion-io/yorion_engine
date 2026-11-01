@@ -297,10 +297,47 @@ jobs:
             dist/BsCalendarCore.xcframework
             dist/swift/yorion_engine.swift
 
+  package-apple-spm:
+    name: Package Swift (XCFramework for SwiftPM)
+    runs-on: macos-latest
+    needs: [validate-and-version, generate-bindings]
+    if: needs.validate-and-version.outputs.should_release == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin,aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: engine
+
+      - name: Download bindings
+        uses: actions/download-artifact@v4
+        with:
+          name: swift-bindings
+          path: dist/swift/
+
+      - name: Build XCFramework (macOS + iOS + iOS simulator)
+        run: bash scripts/package-apple-spm.sh
+
+      - name: Upload XCFramework zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: apple-spm
+          path: dist/spm/yorion_engineFFI.xcframework.zip
+
+      - name: Cancel workflow on failure
+        if: failure()
+        uses: andymckay/cancel-action@0.3
+
   create-release:
     name: Create Release
     runs-on: ubuntu-latest
-    needs: [validate-and-version, build-wasm, package-macos]
+    needs: [validate-and-version, build-wasm, package-macos, package-apple-spm]
     if: needs.validate-and-version.outputs.should_release == 'true'
     steps:
       - uses: actions/checkout@v4
@@ -346,10 +383,13 @@ jobs:
           if [ -d "wasm" ]; then
             tar -czf "../release/wasm-assets-${VERSION}.tar.gz" -C wasm .
           fi
-          
+
+          # Swift Package Manager downloads this exact file name (see swift/Package.swift.in)
+          cp apple-spm/yorion_engineFFI.xcframework.zip ../release/
+
           # Generate checksums
           cd ../release
-          shasum -a 256 *.tar.gz > SHA256SUMS
+          shasum -a 256 *.tar.gz *.zip > SHA256SUMS
           cd ..
 
       - name: Generate changelog
@@ -365,13 +405,22 @@ jobs:
           VERSION="${{ needs.validate-and-version.outputs.version }}"
           sed -i.bak "s/^version = .*/version = \"${VERSION}\"/" engine/Cargo.toml
           rm engine/Cargo.toml.bak
+          # Keep Cargo.lock in step; a stale lockfile makes `cargo publish` fail on a dirty tree.
+          (cd engine && cargo update --workspace)
+
+      - name: Point the Swift package at this release
+        run: |
+          bash scripts/update-swift-package.sh \
+            "${{ needs.validate-and-version.outputs.version }}" \
+            artifacts/apple-spm/yorion_engineFFI.xcframework.zip \
+            artifacts/swift-bindings/yorion_engine.swift
 
       - name: Commit version bump
         run: |
           VERSION="${{ needs.validate-and-version.outputs.version }}"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add engine/Cargo.toml
+          git add engine/Cargo.toml engine/Cargo.lock Package.swift swift/Sources
           git commit -m "chore(release): bump version to ${VERSION}" || echo "No changes to commit"
           git tag "v${VERSION}" || echo "Tag v${VERSION} already exists, skipping"
           git push origin main --tags

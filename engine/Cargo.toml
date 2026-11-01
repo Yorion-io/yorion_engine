@@ -3,11 +3,13 @@ name = "yorion_engine"
 version = "0.4.1"
 edition = "2021"
 authors = ["Umesh Shrestha <umesh@yorion.io>"]
-description = "Platform-agnostic Bikram Sambat calendar engine with tithi support"
+description = "Nepali (Bikram Sambat) calendar engine: BS/AD conversion, panchanga (tithi, nakshatra, yoga, karana) and festival recurrence"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/Yorion-io/yorion_engine"
 homepage = "https://github.com/Yorion-io/yorion_engine"
-keywords = ["bikram-sambat", "nepali-calendar", "calendar", "tithi", "wasm"]
+documentation = "https://docs.rs/yorion_engine"
+readme = "../README.md"
+keywords = ["bikram-sambat", "nepali-calendar", "panchanga", "tithi", "calendar"]
 categories = ["date-and-time", "wasm"]
 rust-version = "1.82"
 
@@ -46,6 +48,13 @@ uniffi-cli = ["uniffi-bindings", "uniffi/cli"]
 proptest = "1.0"
 criterion = { version = "0.5", features = ["html_reports"] }
 
+# Only built when generating foreign-language bindings; without this,
+# `cargo install yorion_engine` would install a binary that just prints an error.
+[[bin]]
+name = "uniffi-bindgen"
+path = "src/bin/uniffi-bindgen.rs"
+required-features = ["uniffi-cli"]
+
 [[bench]]
 name = "engine_perf"
 harness = false
@@ -65,3 +74,10 @@ lto = true
 codegen-units = 1
 panic = "abort"
 strip = true
+
+# Used for the Python wheels (see python/pyproject.toml). UniFFI's library-mode
+# binding generator reads interface metadata from the library's symbols, which
+# `strip = true` above removes, leaving an empty Python module.
+[profile.python-release]
+inherits = "release"
+strip = false

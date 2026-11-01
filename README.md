@@ -76,11 +76,21 @@ The spec is language and platform independent, so anyone can implement a conform
 
 ## Quick start
 
+| Language | Install |
+| --- | --- |
+| Rust | `cargo add yorion_engine` |
+| JavaScript / TypeScript | `npm install @yorion/engine` |
+| Python | `pip install yorion-engine` |
+| Swift (iOS, macOS) | Xcode → Add Package → `https://github.com/Yorion-io/yorion_engine` |
+| Kotlin (Android) | `implementation("io.yorion:yorion-engine:<version>")` |
+
+Registry publishing is being rolled out; see [PUBLISHING.md](PUBLISHING.md) for status. Until a registry has a release, use the git dependency or the artifacts on the [releases page](https://github.com/Yorion-io/yorion_engine/releases).
+
 ### Rust
 
 ```toml
 [dependencies]
-yorion_engine = { git = "https://github.com/Yorion-io/yorion_engine", tag = "v0.2.0" }
+yorion_engine = "0.4"
 ```
 
 ```rust
@@ -106,14 +116,15 @@ Recurrence walkthrough: **[docs/recurring-events.md](docs/recurring-events.md)**
 ### WASM (browser / Node.js)
 
 ```js
-import init, { gregorian_to_bs, get_month_calendar_with_location }
-  from './dist/wasm/bundler/yorion_engine.js';
+import { gregorian_to_bs, get_month_calendar_with_location, Location }
+  from '@yorion/engine';
 
-await init();
 const bs  = gregorian_to_bs(2024, 4, 13);          // { year: 2081, month: 1, day: 1 }
 const loc = new Location(27.7, 85.3, 'Kathmandu', 345);
 const cal = get_month_calendar_with_location(2081, 1, loc);
 ```
+
+In a browser without a bundler, import from `@yorion/engine/web` and call `await init()` first.
 
 Full TypeScript definitions are included. See **[docs/consuming-wasm.md](docs/consuming-wasm.md)**.
 
@@ -123,11 +134,12 @@ Full TypeScript definitions are included. See **[docs/consuming-wasm.md](docs/co
 
 | Target | Status | Mechanism |
 | --- | --- | --- |
-| Native Rust | Shipping | `crate` |
-| WASM (web, bundler, Node.js) | Shipping | `wasm-bindgen` |
-| macOS (arm64 + x86_64) | Shipping | UniFFI → XCFramework |
-| iOS (device + simulator) | Planned | UniFFI → XCFramework |
-| Android / Kotlin | Planned | UniFFI → `.aar` |
+| Native Rust | Shipping | `crate` (crates.io) |
+| WASM (web, bundler, Node.js) | Shipping | `wasm-bindgen` (npm) |
+| Python | Ready to publish | UniFFI → wheels (PyPI) |
+| macOS (arm64 + x86_64) | Shipping | UniFFI → XCFramework (Swift Package Manager) |
+| iOS (device + simulator) | Ready to publish | UniFFI → XCFramework (Swift Package Manager) |
+| Android / Kotlin | Ready to publish | UniFFI → `.aar` (Maven Central) |
 | Flutter / Dart | Planned | `flutter_rust_bridge` |
 | React Native | Planned | `uniffi-bindgen-react-native` |
 | Linux / Windows | Planned | `cdylib` |

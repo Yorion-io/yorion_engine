@@ -1,0 +1,85 @@
+name: Package Check
+
+# Builds the crates.io, npm and PyPI packages on pull requests that touch the
+# engine or the packaging, so a broken package shows up before release day.
+# Nothing is uploaded. Swift and Android need macOS / the NDK and are exercised by
+# release.yml and by a manual dry run of publish.yml.
+
+on:
+  pull_request:
+    paths:
+      - 'engine/**'
+      - 'python/**'
+      - 'npm/**'
+      - 'scripts/build-wasm.sh'
+      - 'scripts/package-npm.sh'
+      - '.github/workflows/package-check.yml'
+      - '.github/workflows/publish.yml'
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  crate:
+    name: crates.io dry run
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: engine
+      - name: cargo publish --dry-run
+        working-directory: engine
+        run: cargo publish --dry-run --locked
+
+  npm:
+    name: npm package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: engine
+      - name: Install wasm-bindgen-cli
+        run: |
+          curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+          cargo binstall --no-confirm wasm-bindgen-cli@0.2.122
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Build, pack and smoke test
+        run: |
+          bash scripts/build-wasm.sh
+          bash scripts/package-npm.sh
+          (cd dist/npm && npm pack)
+          mkdir -p /tmp/npm-smoke && cd /tmp/npm-smoke
+          npm init -y > /dev/null
+          npm install "$GITHUB_WORKSPACE"/dist/npm/*.tgz
+          node -e "const y=require('@yorion/engine');const b=y.gregorian_to_bs(2024,4,13);if(b.year!==2081||b.month!==1||b.day!==1)throw new Error('bad conversion');console.log('cjs ok')"
+          node --input-type=module -e "import {gregorian_to_bs} from '@yorion/engine'; console.log('esm ok', gregorian_to_bs(2024,4,13).year)"
+
+  python:
+    name: Python wheel
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build wheel
+        uses: PyO3/maturin-action@v1
+        with:
+          working-directory: python
+          manylinux: auto
+          args: --out dist
+      - name: Smoke test
+        run: |
+          pip install python/dist/*.whl
+          cd "$RUNNER_TEMP" && python "$GITHUB_WORKSPACE/python/tests/smoke_test.py"

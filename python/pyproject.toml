@@ -1,0 +1,41 @@
+[build-system]
+requires = ["maturin>=1.7,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "yorion-engine"
+description = "Nepali (Bikram Sambat) calendar engine: BS/AD conversion, panchanga (tithi, nakshatra, yoga, karana) and festival recurrence"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT OR Apache-2.0" }
+authors = [{ name = "Umesh Shrestha", email = "umesh@yorion.io" }]
+keywords = ["bikram-sambat", "nepali-calendar", "panchanga", "tithi", "calendar"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Rust",
+  "Topic :: Software Development :: Libraries",
+  "Topic :: Utilities",
+]
+# The version comes from engine/Cargo.toml, so every registry ships the same number.
+dynamic = ["version"]
+
+[project.urls]
+Homepage = "https://github.com/Yorion-io/yorion_engine"
+Repository = "https://github.com/Yorion-io/yorion_engine"
+Changelog = "https://github.com/Yorion-io/yorion_engine/blob/main/CHANGELOG.md"
+
+[tool.maturin]
+# Python bindings are generated from the same UniFFI interface (engine/src/uniffi.udl)
+# that produces the Swift and Kotlin bindings, so there is no separate Python API to maintain.
+bindings = "uniffi"
+manifest-path = "../engine/Cargo.toml"
+features = ["uniffi-bindings"]
+module-name = "yorion_engine"
+# A release profile that keeps symbols until the bindings are generated
+# (see [profile.python-release] in engine/Cargo.toml); maturin strips afterwards.
+profile = "python-release"
+strip = true

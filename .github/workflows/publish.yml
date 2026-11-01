@@ -1,0 +1,291 @@
+name: Publish Packages
+
+# Publishes a GitHub release to the package registries:
+#   crates.io  → yorion_engine          (Rust)
+#   npm        → @yorion/engine         (JavaScript / TypeScript, WebAssembly)
+#   PyPI       → yorion-engine          (Python)
+#   Maven      → io.yorion:yorion-engine (Android / Kotlin)
+# The Swift package needs no job here: release.yml commits Package.swift before tagging.
+#
+# Each registry is switched on separately with a repository variable
+# (Settings → Secrets and variables → Actions → Variables), so a registry whose
+# one-time setup is not finished yet is skipped instead of failing the run:
+#   PUBLISH_CRATES_IO, PUBLISH_NPM, PUBLISH_PYPI, PUBLISH_MAVEN_CENTRAL = true
+# See PUBLISHING.md for that setup.
+
+on:
+  # release.yml creates the release with RELEASE_TOKEN_PAT. Releases created with
+  # the default GITHUB_TOKEN do not trigger other workflows, so keep it a PAT.
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to publish, e.g. v0.5.0'
+        required: true
+      dry_run:
+        description: 'Build and check everything, but upload nothing'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  TAG: ${{ github.event.release.tag_name || inputs.tag }}
+  # 'true' only for a manual run with dry_run ticked; releases always publish.
+  DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+
+jobs:
+  verify:
+    name: Verify tag matches crate version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+
+      - name: Compare versions
+        run: |
+          CRATE_VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' engine/Cargo.toml | head -1)
+          if [ "v${CRATE_VERSION}" != "${TAG}" ]; then
+            echo "::error::Tag ${TAG} does not match engine/Cargo.toml version ${CRATE_VERSION}"
+            exit 1
+          fi
+          echo "Publishing ${CRATE_VERSION} (dry run: ${DRY_RUN})"
+
+  # ---------------------------------------------------------------- crates.io
+  crates-io:
+    name: crates.io
+    needs: verify
+    if: vars.PUBLISH_CRATES_IO == 'true'
+    runs-on: ubuntu-latest
+    environment: crates-io
+    permissions:
+      contents: read
+      id-token: write  # trusted publishing
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Authenticate with crates.io (trusted publishing)
+        id: auth
+        if: env.DRY_RUN != 'true'
+        uses: rust-lang/crates-io-auth-action@v1
+
+      - name: Publish
+        working-directory: engine
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+        run: |
+          if [ "$DRY_RUN" = "true" ]; then
+            cargo publish --dry-run
+          else
+            cargo publish
+          fi
+
+  # ---------------------------------------------------------------------- npm
+  npm:
+    name: npm
+    needs: verify
+    if: vars.PUBLISH_NPM == 'true'
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write  # trusted publishing + provenance
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: engine
+
+      - name: Install wasm-bindgen-cli
+        # Must match the wasm-bindgen crate version pinned in engine/Cargo.toml.
+        run: |
+          curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+          cargo binstall --no-confirm wasm-bindgen-cli@0.2.122
+
+      - name: Build WASM and assemble package
+        run: |
+          bash scripts/build-wasm.sh
+          bash scripts/package-npm.sh
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: Use an npm that supports trusted publishing
+        run: npm install -g npm@^11.5.1
+
+      - name: Smoke test the packed tarball
+        run: |
+          (cd dist/npm && npm pack)
+          mkdir -p /tmp/npm-smoke && cd /tmp/npm-smoke
+          npm init -y > /dev/null
+          npm install "$GITHUB_WORKSPACE"/dist/npm/*.tgz
+          node -e "const y=require('@yorion/engine');const b=y.gregorian_to_bs(2024,4,13);if(b.year!==2081||b.month!==1||b.day!==1)throw new Error('bad conversion');console.log('ok',b.year,b.month,b.day)"
+          node --input-type=module -e "import {gregorian_to_bs} from '@yorion/engine'; console.log('esm ok', gregorian_to_bs(2024,4,13).year)"
+
+      - name: Publish
+        working-directory: dist/npm
+        run: |
+          if [ "$DRY_RUN" = "true" ]; then
+            npm publish --dry-run
+          else
+            npm publish --access public
+          fi
+
+  # --------------------------------------------------------------------- PyPI
+  pypi-wheels:
+    name: PyPI wheel (${{ matrix.os }} ${{ matrix.target }})
+    needs: verify
+    if: vars.PUBLISH_PYPI == 'true'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - { os: ubuntu-latest, target: x86_64 }
+          - { os: ubuntu-latest, target: aarch64 }
+          - { os: macos-latest, target: x86_64 }
+          - { os: macos-latest, target: aarch64 }
+          - { os: windows-latest, target: x64 }
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Build wheel
+        uses: PyO3/maturin-action@v1
+        with:
+          working-directory: python
+          target: ${{ matrix.target }}
+          manylinux: auto
+          # No --release: pyproject.toml selects the python-release profile, which
+          # keeps the symbols UniFFI needs to generate the Python module.
+          args: --out dist
+
+      - name: Smoke test
+        if: matrix.os == 'ubuntu-latest' && matrix.target == 'x86_64'
+        run: |
+          pip install python/dist/*.whl
+          cd "$RUNNER_TEMP" && python "$GITHUB_WORKSPACE/python/tests/smoke_test.py"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pypi-wheels-${{ matrix.os }}-${{ matrix.target }}
+          path: python/dist/*.whl
+
+  pypi-sdist:
+    name: PyPI source distribution
+    needs: verify
+    if: vars.PUBLISH_PYPI == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+
+      - name: Build sdist
+        uses: PyO3/maturin-action@v1
+        with:
+          working-directory: python
+          command: sdist
+          args: --out dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pypi-sdist
+          path: python/dist/*.tar.gz
+
+  pypi:
+    name: PyPI
+    needs: [pypi-wheels, pypi-sdist]
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      contents: read
+      id-token: write  # trusted publishing
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: pypi-*
+          path: dist
+          merge-multiple: true
+
+      - name: Check distributions
+        run: |
+          ls -l dist
+          pipx run twine check --strict dist/*
+
+      - name: Publish
+        if: env.DRY_RUN != 'true'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+
+  # ------------------------------------------------------------ Maven Central
+  maven-central:
+    name: Maven Central
+    needs: verify
+    if: vars.PUBLISH_MAVEN_CENTRAL == 'true'
+    runs-on: ubuntu-latest
+    environment: maven-central
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android,i686-linux-android
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: engine
+
+      - name: Install cargo-ndk
+        run: |
+          curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+          cargo binstall --no-confirm cargo-ndk
+
+      - name: Build and publish
+        env:
+          ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.MAVEN_SIGNING_KEY }}
+          ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.MAVEN_SIGNING_KEY_PASSWORD }}
+        run: |
+          # GitHub's Ubuntu runners ship the Android SDK and NDK.
+          export ANDROID_NDK_HOME="$ANDROID_NDK_LATEST_HOME"
+          if [ "$DRY_RUN" = "true" ]; then
+            ./scripts/build-android.sh publishToMavenLocal
+          else
+            ./scripts/build-android.sh publishToMavenCentral
+          fi

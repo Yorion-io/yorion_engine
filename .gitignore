@@ -15,3 +15,11 @@ target/
 # Node modules (defense-in-depth — inner .gitignore also covers this)
 node_modules/
 .build
+
+# Python packaging (python/)
+python/dist/
+__pycache__/
+*.pyc
+
+# Swift Package Manager
+.swiftpm/
