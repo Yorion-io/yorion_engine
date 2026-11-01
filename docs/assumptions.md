@@ -144,11 +144,14 @@ Source: `services/tithi_generator.rs:65–139`.
 
 ### 4.6 AD recurrence rules are expanded to dates by a built-in RFC 5545 expander
 
-`AdRecurrenceRule` stores the raw iCalendar text (`DTSTART`, `RRULE`, `RDATE`, `EXDATE`, or a bare `FREQ=…` rule) and expands it with `domain/recurrence/ad_expander.rs`. It supports `FREQ=DAILY|WEEKLY|MONTHLY|YEARLY`, `INTERVAL`, `COUNT`, `UNTIL`, `BYMONTH`, `BYMONTHDAY`, `BYYEARDAY`, `BYDAY` (with ordinals for MONTHLY/YEARLY), `BYSETPOS` and `WKST`. It rejects, with an error, sub-daily frequencies, multi-valued `BYHOUR`/`BYMINUTE`/`BYSECOND`, `BYWEEKNO`, `EXRULE` and `RDATE` periods.
+`AdRecurrenceRule` stores the raw iCalendar text and expands it with `domain/recurrence/ad_expander.rs`. The text may be the recurrence lines (`DTSTART`, `RRULE`, `RDATE`, `EXDATE`, `EXRULE`), a bare `FREQ=…` rule, or a whole `VEVENT`/`VCALENDAR` export: other properties are ignored, as is everything inside `VTIMEZONE` and `VALARM`. Only one event per call.
+
+It supports `FREQ=DAILY|WEEKLY|MONTHLY|YEARLY`, `INTERVAL`, `COUNT`, `UNTIL`, `BYMONTH`, `BYWEEKNO` (YEARLY only, ISO 8601 weeks), `BYMONTHDAY`, `BYYEARDAY`, `BYDAY` (with ordinals for MONTHLY/YEARLY), `BYSETPOS`, `WKST`, `RDATE` periods (counted by their start) and `EXRULE`. It rejects, with an error, sub-daily frequencies and multi-valued `BYHOUR`/`BYMINUTE`/`BYSECOND`. An expansion returning more than 10,000 dates fails with `InstanceLimitExceeded`, the same cap as the BS family.
 
 - Dates are taken in their own zone: `DTSTART;TZID=Asia/Kathmandu:20240101T000000` occurs on 1 January. No time-zone database is involved.
 - A rule without `DTSTART` is anchored at the start of the query window.
 - A `BYDAY` list mixing numbered and plain days (`-1FR,TH`) matches either, per RFC 5545. rrule.js, python-dateutil and the `rrule` crate require both.
+- `BYWEEKNO` follows ISO 8601 at year edges: with `BYWEEKNO=52`, 1–2 January 2011 (in ISO week 52 of 2010) are included. python-dateutil and the `rrule` crate miscount the previous year's weeks there and leave them out.
 
 The expander replaced the `rrule` crate (see CHANGELOG). `tests/ad_rrule_differential.rs` checks it against `rrule` on random rules.
 

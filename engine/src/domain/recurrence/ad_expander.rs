@@ -8,12 +8,19 @@
 //! both produce the same dates on thousands of random rules.
 //!
 //! Supported: `FREQ=DAILY|WEEKLY|MONTHLY|YEARLY`, `INTERVAL`, `COUNT`, `UNTIL`,
-//! `BYMONTH`, `BYMONTHDAY`, `BYYEARDAY`, `BYDAY` (with ordinals for MONTHLY and
-//! YEARLY), `BYSETPOS`, `WKST`, several `RRULE`s, `RDATE` and `EXDATE`.
+//! `BYMONTH`, `BYWEEKNO` (YEARLY), `BYMONTHDAY`, `BYYEARDAY`, `BYDAY` (with
+//! ordinals for MONTHLY and YEARLY), `BYSETPOS`, `WKST`, several `RRULE`s,
+//! `RDATE` (dates, date-times and periods, which count by their start),
+//! `EXDATE` and `EXRULE`. The input may be just those lines or a whole
+//! `VEVENT`/`VCALENDAR`: other properties are ignored, as is everything inside
+//! `VTIMEZONE` and `VALARM` (whose `RRULE`s describe daylight saving, not the event).
 //!
 //! Deliberately not supported, with a clear error instead: sub-daily
-//! frequencies, more than one value in `BYHOUR`/`BYMINUTE`/`BYSECOND` (both
-//! would only repeat the same date), `BYWEEKNO`, `EXRULE` and `RDATE` periods.
+//! frequencies and more than one value in `BYHOUR`/`BYMINUTE`/`BYSECOND`. Both
+//! would only repeat the same date.
+//!
+//! An expansion stops with `InstanceLimitExceeded` past 10,000 dates, the same
+//! safety cap the BS family uses.
 //!
 //! One intentional difference from those libraries: a `BYDAY` list that mixes
 //! plain and numbered days (`BYDAY=-1FR,TH`) matches either, as RFC 5545 lists
@@ -34,9 +41,13 @@ use crate::error::{BsCalendarError, Result};
 pub struct AdRecurrenceSet {
     dtstart: Option<DateValue>,
     rules: Vec<Rule>,
+    exrules: Vec<Rule>,
     rdates: Vec<DateValue>,
     exdates: Vec<DateValue>,
 }
+
+/// Most dates one expansion may return (same cap as the BS family).
+pub const MAX_AD_INSTANCES: usize = 10_000;
 
 /// A DATE or DATE-TIME value. `time` is `None` for a DATE (`VALUE=DATE`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -60,6 +71,7 @@ struct Rule {
     count: Option<u32>,
     until: Option<DateValue>,
     by_month: Vec<u32>,
+    by_week_no: Vec<i32>,
     by_month_day: Vec<i32>,
     by_year_day: Vec<i32>,
     by_day: Vec<(Option<i32>, Weekday)>,
@@ -72,17 +84,22 @@ fn invalid(msg: impl Into<String>) -> BsCalendarError {
 }
 
 impl AdRecurrenceSet {
-    /// Parses an iCalendar recurrence. Accepts full content lines
-    /// (`DTSTART:…\nRRULE:…`) or a bare rule (`FREQ=WEEKLY;BYDAY=MO`), which may
-    /// carry an inline `DTSTART=YYYYMMDD` and `X-` parameters such as `X-CALENDAR=AD`.
+    /// Parses an iCalendar recurrence. Accepts the recurrence lines
+    /// (`DTSTART:…\nRRULE:…`), a whole `VEVENT` or `VCALENDAR`, or a bare rule
+    /// (`FREQ=WEEKLY;BYDAY=MO`), which may carry an inline `DTSTART=YYYYMMDD` and
+    /// `X-` parameters such as `X-CALENDAR=AD`.
     pub fn parse(input: &str) -> Result<Self> {
         let mut set = AdRecurrenceSet {
             dtstart: None,
             rules: Vec::new(),
+            exrules: Vec::new(),
             rdates: Vec::new(),
             exdates: Vec::new(),
         };
         let mut inline_dtstart = None;
+        // Components we are inside (BEGIN:…/END:…), and how many events we saw.
+        let mut components: Vec<String> = Vec::new();
+        let mut events = 0;
 
         for line in unfold(input) {
             let line = line.trim();
@@ -90,30 +107,51 @@ impl AdRecurrenceSet {
                 continue;
             }
             let upper = line.to_ascii_uppercase();
-            let property = ["DTSTART", "RRULE", "EXDATE", "RDATE", "EXRULE"]
-                .into_iter()
-                .find(|p| {
-                    upper.starts_with(p)
-                        && matches!(upper.as_bytes().get(p.len()), Some(b':') | Some(b';'))
-                });
 
-            let Some(property) = property else {
-                // A bare RRULE value.
+            // A bare rule ("FREQ=…;…") has '=' before any ':' or ';'. Anything
+            // else is a content line: NAME[;PARAM=…]:VALUE.
+            let first_sep = upper.find([':', ';', '=']);
+            if first_sep.map(|i| upper.as_bytes()[i]) == Some(b'=') {
                 let (rule, dtstart) = parse_rule(line)?;
                 set.rules.push(rule);
                 inline_dtstart = inline_dtstart.or(dtstart);
                 continue;
-            };
-
+            }
+            let name_end =
+                first_sep.ok_or_else(|| invalid(format!("cannot parse line '{line}'")))?;
+            let name = &upper[..name_end];
             let colon = line
                 .find(':')
-                .ok_or_else(|| invalid(format!("{property} has no value")))?;
-            let params = line[property.len()..colon].to_ascii_uppercase();
+                .ok_or_else(|| invalid(format!("{name} has no value")))?;
             let value = &line[colon + 1..];
-            if params.contains("VALUE=PERIOD") {
-                return Err(invalid("RDATE periods are not supported"));
+
+            match name {
+                "BEGIN" => {
+                    let component = value.trim().to_ascii_uppercase();
+                    if component == "VEVENT" || component == "VTODO" {
+                        events += 1;
+                        if events > 1 {
+                            return Err(invalid("more than one event; pass one VEVENT at a time"));
+                        }
+                    }
+                    components.push(component);
+                    continue;
+                }
+                "END" => {
+                    components.pop();
+                    continue;
+                }
+                _ => {}
+            }
+            // Time-zone and alarm components carry their own DTSTART/RRULE.
+            if components
+                .iter()
+                .any(|c| matches!(c.as_str(), "VTIMEZONE" | "STANDARD" | "DAYLIGHT" | "VALARM"))
+            {
+                continue;
             }
 
+            let property = name;
             match property {
                 "DTSTART" => {
                     if set.dtstart.is_some() {
@@ -128,6 +166,8 @@ impl AdRecurrenceSet {
                 }
                 "RDATE" => {
                     for v in value.split(',') {
+                        // A PERIOD ("start/end" or "start/duration") counts by its start.
+                        let v = v.split('/').next().unwrap_or(v);
                         set.rdates.push(parse_date_value(v)?);
                     }
                 }
@@ -136,11 +176,10 @@ impl AdRecurrenceSet {
                         set.exdates.push(parse_date_value(v)?);
                     }
                 }
-                _ => {
-                    return Err(invalid(
-                        "EXRULE is not supported (it was removed from iCalendar in RFC 5545)",
-                    ))
-                }
+                // Deprecated by RFC 5545 but still found in older calendars.
+                "EXRULE" => set.exrules.push(parse_rule(value)?.0),
+                // Any other property of the event (SUMMARY, UID, DTEND, ...).
+                _ => {}
             }
         }
 
@@ -167,17 +206,36 @@ impl AdRecurrenceSet {
             time: None,
         });
 
-        let mut dates = Vec::new();
-        for rule in &self.rules {
+        let mut excluded_by_rule = Vec::new();
+        for rule in &self.exrules {
             expand_rule(rule, dtstart, end, &mut |date| {
-                if date >= start && !self.is_excluded(date, dtstart.time) {
-                    dates.push(date);
+                if date >= start {
+                    excluded_by_rule.push(date);
                 }
             })?;
         }
+
+        let mut dates = Vec::new();
+        for rule in &self.rules {
+            expand_rule(rule, dtstart, end, &mut |date| {
+                if date >= start
+                    && !self.is_excluded(date, dtstart.time)
+                    && !excluded_by_rule.contains(&date)
+                {
+                    dates.push(date);
+                }
+            })?;
+            if dates.len() > MAX_AD_INSTANCES {
+                return Err(BsCalendarError::InstanceLimitExceeded(MAX_AD_INSTANCES));
+            }
+        }
         for rdate in &self.rdates {
             let date = rdate.date;
-            if date >= start && date <= end && !self.is_excluded(date, rdate.time.or(dtstart.time))
+            // Exceptions (EXDATE and EXRULE) apply to the whole set, RDATEs included.
+            if date >= start
+                && date <= end
+                && !self.is_excluded(date, rdate.time.or(dtstart.time))
+                && !excluded_by_rule.contains(&date)
             {
                 dates.push(date);
             }
@@ -185,6 +243,9 @@ impl AdRecurrenceSet {
 
         dates.sort_unstable();
         dates.dedup();
+        if dates.len() > MAX_AD_INSTANCES {
+            return Err(BsCalendarError::InstanceLimitExceeded(MAX_AD_INSTANCES));
+        }
         Ok(dates)
     }
 
@@ -305,6 +366,7 @@ fn parse_rule(value: &str) -> Result<(Rule, Option<DateValue>)> {
         count: None,
         until: None,
         by_month: Vec::new(),
+        by_week_no: Vec::new(),
         by_month_day: Vec::new(),
         by_year_day: Vec::new(),
         by_day: Vec::new(),
@@ -402,7 +464,7 @@ fn parse_rule(value: &str) -> Result<(Rule, Option<DateValue>)> {
                     return Err(invalid(format!("{name} with several values is not supported: recurrences are expanded to dates")));
                 }
             }
-            "BYWEEKNO" => return Err(invalid("BYWEEKNO is not supported")),
+            "BYWEEKNO" => rule.by_week_no = parse_int_list("BYWEEKNO", &val, 1, 53, true)?,
             _ => return Err(invalid(format!("unknown RRULE part '{name}'"))),
         }
     }
@@ -415,7 +477,11 @@ fn parse_rule(value: &str) -> Result<(Rule, Option<DateValue>)> {
             "BYDAY ordinals (e.g. 2MO) are only valid with FREQ=MONTHLY or YEARLY",
         ));
     }
+    if !rule.by_week_no.is_empty() && rule.freq != Freq::Yearly {
+        return Err(invalid("BYWEEKNO is only valid with FREQ=YEARLY"));
+    }
     if !rule.by_set_pos.is_empty()
+        && rule.by_week_no.is_empty()
         && rule.by_month.is_empty()
         && rule.by_month_day.is_empty()
         && rule.by_year_day.is_empty()
@@ -455,7 +521,11 @@ fn expand_rule(
 ) -> Result<()> {
     // RFC 5545 §3.3.10: with no BYxxx that picks days, the day comes from DTSTART.
     let mut rule = rule.clone();
-    if rule.by_year_day.is_empty() && rule.by_month_day.is_empty() && rule.by_day.is_empty() {
+    if rule.by_week_no.is_empty()
+        && rule.by_year_day.is_empty()
+        && rule.by_month_day.is_empty()
+        && rule.by_day.is_empty()
+    {
         match rule.freq {
             Freq::Yearly => {
                 if rule.by_month.is_empty() {
@@ -581,6 +651,9 @@ fn day_matches(rule: &Rule, d: NaiveDate) -> bool {
     if !rule.by_month.is_empty() && !rule.by_month.contains(&d.month()) {
         return false;
     }
+    if !rule.by_week_no.is_empty() && !week_matches(rule, d) {
+        return false;
+    }
     if !rule.by_year_day.is_empty() {
         let len = days_in_year(d.year()) as i32;
         let n = d.ordinal() as i32;
@@ -631,6 +704,43 @@ fn day_matches(rule: &Rule, d: NaiveDate) -> bool {
         }
     }
     true
+}
+
+/// First day of week 1 of `year`: the week (starting on `wkst`) that holds at
+/// least four days of the year, i.e. the one containing 4 January (ISO 8601).
+fn week1_start(year: i32, wkst: Weekday) -> NaiveDate {
+    let jan4 = NaiveDate::from_ymd_opt(year, 1, 4).unwrap_or(NaiveDate::MIN);
+    let back =
+        (7 + jan4.weekday().num_days_from_monday() as i64 - wkst.num_days_from_monday() as i64) % 7;
+    jan4 - Duration::days(back)
+}
+
+/// BYWEEKNO for a day of a YEARLY period. Negative numbers count from the end
+/// of the year. Days at the edges of the year that belong to the neighbouring
+/// year's week 1 or last week match those numbers, as in python-dateutil.
+fn week_matches(rule: &Rule, d: NaiveDate) -> bool {
+    let year = d.year();
+    let this_start = week1_start(year, rule.wkst);
+    let next_start = week1_start(year + 1, rule.wkst);
+    let weeks = ((next_start - this_start).num_days() / 7) as i32;
+
+    if d < this_start {
+        // The tail of the previous year's last week.
+        let prev_weeks = ((this_start - week1_start(year - 1, rule.wkst)).num_days() / 7) as i32;
+        return rule.by_week_no.iter().any(|&n| n == -1 || n == prev_weeks);
+    }
+    if d >= next_start {
+        // The head of next year's week 1.
+        return rule.by_week_no.contains(&1);
+    }
+    let week = ((d - this_start).num_days() / 7) as i32 + 1;
+    rule.by_week_no.iter().any(|&n| {
+        if n > 0 {
+            n == week
+        } else {
+            weeks + 1 + n == week
+        }
+    })
 }
 
 /// BYSETPOS: picks the nth (or nth-from-last) matches within a period.
@@ -742,6 +852,87 @@ mod tests {
     }
 
     #[test]
+    fn whole_vcalendar_uses_the_event_and_skips_timezone_rules() {
+        // As exported by calendar apps: the VTIMEZONE's DTSTART/RRULE describe
+        // daylight saving and must not be mistaken for the event's recurrence.
+        let ics = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Example//EN\r\n\
+            BEGIN:VTIMEZONE\r\nTZID:America/New_York\r\nBEGIN:DAYLIGHT\r\n\
+            DTSTART:19700308T020000\r\nRRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=2SU\r\n\
+            END:DAYLIGHT\r\nEND:VTIMEZONE\r\n\
+            BEGIN:VEVENT\r\nUID:abc@example.com\r\nSUMMARY:Team sync; weekly\r\n\
+            DTSTART;TZID=America/New_York:20240102T090000\r\nDTEND;TZID=America/New_York:20240102T093000\r\n\
+            RRULE:FREQ=WEEKLY;COUNT=3\r\nBEGIN:VALARM\r\nTRIGGER:-PT10M\r\nACTION:DISPLAY\r\nEND:VALARM\r\n\
+            END:VEVENT\r\nEND:VCALENDAR\r\n";
+        assert_eq!(
+            dates(ics, d(2024, 1, 1), d(2024, 12, 31)),
+            vec![d(2024, 1, 2), d(2024, 1, 9), d(2024, 1, 16)]
+        );
+
+        let two = "BEGIN:VEVENT\nRRULE:FREQ=DAILY\nEND:VEVENT\nBEGIN:VEVENT\nRRULE:FREQ=DAILY\nEND:VEVENT";
+        assert!(AdRecurrenceSet::parse(two).is_err());
+    }
+
+    #[test]
+    fn rdate_period_counts_by_its_start() {
+        let rule = "DTSTART:20240101T090000Z\nRDATE;VALUE=PERIOD:20240105T090000Z/20240105T100000Z,20240107T090000Z/PT1H";
+        assert_eq!(
+            dates(rule, d(2024, 1, 1), d(2024, 1, 31)),
+            vec![d(2024, 1, 5), d(2024, 1, 7)]
+        );
+    }
+
+    #[test]
+    fn exrule_removes_its_dates() {
+        let rule = "DTSTART:20240101\nRRULE:FREQ=DAILY;COUNT=10\nEXRULE:FREQ=WEEKLY;BYDAY=SA,SU";
+        assert_eq!(
+            dates(rule, d(2024, 1, 1), d(2024, 1, 31)),
+            vec![
+                d(2024, 1, 1),
+                d(2024, 1, 2),
+                d(2024, 1, 3),
+                d(2024, 1, 4),
+                d(2024, 1, 5),
+                d(2024, 1, 8),
+                d(2024, 1, 9),
+                d(2024, 1, 10)
+            ]
+        );
+    }
+
+    #[test]
+    fn byweekno_uses_iso_weeks() {
+        // ISO week 1 of 2026 is 29 Dec 2025 - 4 Jan 2026; 2026 has 53 weeks.
+        let mondays = dates(
+            "DTSTART:20250101\nRRULE:FREQ=YEARLY;BYWEEKNO=1,-1;BYDAY=MO",
+            d(2025, 1, 1),
+            d(2026, 12, 31),
+        );
+        assert_eq!(
+            mondays,
+            vec![d(2025, 12, 22), d(2025, 12, 29), d(2026, 12, 28)]
+        );
+    }
+
+    #[test]
+    fn expansion_is_capped_like_the_bs_family() {
+        let set = AdRecurrenceSet::parse("DTSTART:19000101\nRRULE:FREQ=DAILY").unwrap();
+        let err = set.dates_between(d(1900, 1, 1), d(2100, 1, 1)).unwrap_err();
+        assert!(
+            matches!(
+                err,
+                BsCalendarError::InstanceLimitExceeded(MAX_AD_INSTANCES)
+            ),
+            "{err:?}"
+        );
+        // Just under the cap is fine.
+        let last = d(1900, 1, 1) + Duration::days(MAX_AD_INSTANCES as i64 - 1);
+        assert_eq!(
+            set.dates_between(d(1900, 1, 1), last).unwrap().len(),
+            MAX_AD_INSTANCES
+        );
+    }
+
+    #[test]
     fn rejects_malformed_rules() {
         for bad in [
             "",
@@ -749,7 +940,7 @@ mod tests {
             "FREQ=WEEKLY;BYDAY=1MO",
             "FREQ=MONTHLY;BYMONTHDAY=32",
             "FREQ=DAILY;BYSETPOS=1",
-            "FREQ=YEARLY;BYWEEKNO=1",
+            "FREQ=MONTHLY;BYWEEKNO=1",
             "FREQ=DAILY;FOO=1",
             "DTSTART:2024\nRRULE:FREQ=DAILY",
             "COUNT=3",

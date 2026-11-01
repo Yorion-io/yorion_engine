@@ -836,3 +836,14 @@ fn x_take_first_false_not_emitted_in_serialization() {
     let s = RRuleParser::tithi_to_rrule(&rule);
     assert!(!s.contains("X-TAKE"), "X-TAKE must not appear when take_first=false");
 }
+
+#[test]
+fn parse_routes_a_whole_vevent_to_ad() {
+    // A calendar export: the `;` inside SUMMARY must not trip BS-RRULE parsing.
+    let ics = "BEGIN:VEVENT\r\nUID:1@example.com\r\nSUMMARY:Rent; monthly\r\n\
+               DTSTART;VALUE=DATE:20240115\r\nRRULE:FREQ=MONTHLY;COUNT=3\r\nEND:VEVENT";
+    match RRuleParser::parse(ics).unwrap() {
+        Recurrence::Ad(rule) => assert_eq!(rule.rrule, ics),
+        other => panic!("expected Ad, got {:?}", other),
+    }
+}

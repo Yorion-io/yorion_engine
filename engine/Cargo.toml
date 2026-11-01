@@ -46,7 +46,7 @@ uniffi-cli = ["uniffi-bindings", "uniffi/cli"]
 # Reference implementation that src/services/ephemeris.rs is tested against, bit for bit.
 astro = "2.0.0"
 # Reference implementation that src/domain/recurrence/ad_expander.rs is tested against.
-rrule = { version = "0.14.0", default-features = false }
+rrule = { version = "0.14.0", default-features = false, features = ["exrule"] }
 proptest = "1.0"
 criterion = { version = "0.5", features = ["html_reports"] }
 

@@ -43,6 +43,14 @@ impl RRuleParser {
 
     /// Parse RRULE string and return appropriate Recurrence enum
     pub fn parse(rrule: &str) -> Result<Recurrence> {
+        // Multi-line input is iCalendar content (DTSTART/RRULE lines, or a whole
+        // VEVENT). BS-RRULE strings are single-line, so without BS-RRULE markers
+        // it is plain RFC 5545 and goes to the AD family as-is.
+        let upper = rrule.to_ascii_uppercase();
+        if rrule.contains('\n') && !upper.contains("X-CALENDAR") && !upper.contains("X-TITHI") {
+            return Ok(Recurrence::Ad(Self::parse_ad_rrule(rrule)?));
+        }
+
         let params = Self::parse_params(rrule)?;
 
         // BS-RRULE v2.0: family is selected by the single `X-CALENDAR` discriminator

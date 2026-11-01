@@ -5,6 +5,7 @@ All notable changes to `yorion_engine` are documented here.
 ## [Unreleased]
 
 ### Added
+- AD recurrences accept a whole `VEVENT`/`VCALENDAR` export (other properties, `VTIMEZONE` and `VALARM` are ignored), and support `BYWEEKNO`, `EXRULE` and `RDATE` periods.
 - Packaging for crates.io, npm (`@yorion/engine`), PyPI (`yorion-engine`), Swift Package Manager and Maven Central (`io.yorion:yorion-engine`), plus a `publish.yml` workflow. See PUBLISHING.md.
 - Extended BS ↔ AD conversion data to **BS 1975–2100** (was 2000–2090), 126 years, sourced from the `opensource-nepal/nepali_datetime` reference table.
 - **Yoga** and **Karana** — the engine now computes all five panchanga angas (tithi, vara, nakshatra, yoga, karana). New `Yoga`/`Karana` enums, getters, and name helpers across the Rust, WASM, and UniFFI surfaces.
@@ -16,6 +17,7 @@ All notable changes to `yorion_engine` are documented here.
 - Build-time and test-time invariants that each year's month lengths sum to its anchor gap.
 
 ### Changed
+- AD expansions now stop with `InstanceLimitExceeded` past 10,000 dates, like the BS family; they previously had no cap.
 - Sun and Moon longitudes now come from a small built-in port of the two `astro` routines the engine uses, with the Earth's VSOP87 longitude series as a static table. Results are bit-for-bit identical (tested against `astro` over 1900–2150), and the WASM binary shrinks from 3.4 MB to 1.9 MB (1.30 MB → 0.48 MB gzipped). `astro` is now only a dev-dependency.
 - AD (`X-CALENDAR=AD`) recurrences are expanded by a built-in RFC 5545 expander instead of the `rrule` crate, which also drops `regex` and the `chrono-tz` time-zone database. A differential test checks it against `rrule` on random rules. Together with the ephemeris change, the WASM binary goes from 3.4 MB to 330 KB (140 KB gzipped) and the Android/Python libraries from about 3–5 MB to about 0.5–0.6 MB.
 - Ayanamsa is now the **computed Lahiri (Chitrapaksha)** value (linear drift from the J2000.0 epoch) instead of a fixed 24.0°, fixing zodiac/nakshatra misassignment near boundaries.
