@@ -93,7 +93,7 @@ pub fn moon_longitude(jd: f64) -> f64 {
         ],
     ))
     .to_radians();
-    let e = 1.0 - jc * (0.002_516 + jc * 0.000_0074);
+    let e = 1.0 - jc * (0.002_516 + jc * 0.000_007_4);
     let l1 = limit_to_360(powers(
         jc,
         218.3164477,

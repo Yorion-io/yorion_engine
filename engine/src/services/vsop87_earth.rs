@@ -7,6 +7,10 @@
 // Each row is [A, B, C] for the term A * cos(B + C * t), t in Julian millennia from J2000.
 // Do not edit by hand.
 
+// The literals are the published VSOP87 values (some round to π); they must stay
+// exactly as printed for bit-identical results.
+#![allow(clippy::approx_constant, clippy::excessive_precision)]
+
 pub(crate) static EARTH_L0: [[f64; 3]; 559] = [
     [1.75347045673, 0.0, 0.0],
     [0.03341656456, 4.66925680417, 6283.0758499914],
