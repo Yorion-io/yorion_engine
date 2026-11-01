@@ -1,6 +1,6 @@
-use crate::error::{BsCalendarError, Result};
+use super::ad_expander::AdRecurrenceSet;
+use crate::error::Result;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::str::FromStr;
 
 /// AD recurrence rule wrapper around standard RFC 5545 string
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -16,27 +16,14 @@ impl AdRecurrenceRule {
         Ok(rule)
     }
 
+    /// Checks the rule parses as an RFC 5545 recurrence (see [`AdRecurrenceSet`]).
     pub fn validate(&self) -> Result<()> {
-        // Validate by attempting to parse with rrule crate
-        // We use UTC as the timezone for validation purposes to match our NaiveDate usage
-        let rrule_str = if !self.rrule.to_uppercase().starts_with("RRULE:")
-            && !self.rrule.to_uppercase().contains("DTSTART")
-        {
-            // Basic validation for fragments, though we expect full strings usually
-            // If it's just a fragment, we might not be able to validate fully without DTSTART
-            return Ok(());
-        } else {
-            &self.rrule
-        };
+        self.recurrence_set().map(|_| ())
+    }
 
-        // We accept flexible parsing here, strict validation happens during generation
-        if rrule::RRuleSet::from_str(rrule_str).is_err() {
-            return Err(BsCalendarError::InvalidRecurrenceRule(
-                "Invalid AD recurrence rule format".to_string(),
-            ));
-        }
-
-        Ok(())
+    /// The parsed recurrence, ready to expand into dates.
+    pub fn recurrence_set(&self) -> Result<AdRecurrenceSet> {
+        AdRecurrenceSet::parse(&self.rrule)
     }
 
     /// Convert to RRULE string

@@ -1,9 +1,9 @@
 // AD Recurrence Tests
 // Verifying standard RFC 5545 behavior via the InstanceGenerator
-use yorion_engine::domain::recurrence::AdRecurrenceRule;
-use yorion_engine::services::{ConversionService, InstanceGenerator};
 use chrono::{Datelike, NaiveDate, Weekday};
 use std::sync::Arc;
+use yorion_engine::domain::recurrence::AdRecurrenceRule;
+use yorion_engine::services::{ConversionService, InstanceGenerator};
 
 mod helpers;
 use helpers::TestCalendarProvider;
@@ -211,9 +211,7 @@ fn test_ad_yearly_bymonth_byday_combo() {
 
     // June 2024 Fridays: 7,14,21,28 (4). December 2024 Fridays: 6,13,20,27 (4).
     assert_eq!(instances.len(), 8);
-    assert!(instances
-        .iter()
-        .all(|d| d.month() == 6 || d.month() == 12));
+    assert!(instances.iter().all(|d| d.month() == 6 || d.month() == 12));
     assert!(instances.iter().all(|d| d.weekday() == Weekday::Fri));
 }
 
@@ -226,10 +224,9 @@ fn test_ad_yearly_leap_day_feb29_only_on_leap_years() {
     let generator = create_generator();
 
     // Yearly on Feb 29: only leap years actually have it (RFC 5545: invalid dates skipped).
-    let rule = AdRecurrenceRule::new(
-        "DTSTART:20240229T000000Z\nRRULE:FREQ=YEARLY;COUNT=2".to_string(),
-    )
-    .unwrap();
+    let rule =
+        AdRecurrenceRule::new("DTSTART:20240229T000000Z\nRRULE:FREQ=YEARLY;COUNT=2".to_string())
+            .unwrap();
     let start = NaiveDate::from_ymd_opt(2024, 1, 1).unwrap();
     let end = NaiveDate::from_ymd_opt(2032, 12, 31).unwrap();
 
@@ -256,7 +253,10 @@ fn test_ad_count_takes_effect_before_until() {
     let instances = generator.generate_ad_instances(&rule, start, end).unwrap();
 
     assert_eq!(instances.len(), 3);
-    assert_eq!(instances.last().unwrap(), &NaiveDate::from_ymd_opt(2024, 1, 3).unwrap());
+    assert_eq!(
+        instances.last().unwrap(),
+        &NaiveDate::from_ymd_opt(2024, 1, 3).unwrap()
+    );
 }
 
 #[test]
@@ -281,15 +281,61 @@ fn test_ad_range_start_after_dtstart_skips_earlier() {
     let generator = create_generator();
 
     // Daily from Jan 1, but query starting Jan 10 → first instance is Jan 10.
-    let rule = AdRecurrenceRule::new(
-        "DTSTART:20240101T000000Z\nRRULE:FREQ=DAILY;COUNT=30".to_string(),
-    )
-    .unwrap();
+    let rule =
+        AdRecurrenceRule::new("DTSTART:20240101T000000Z\nRRULE:FREQ=DAILY;COUNT=30".to_string())
+            .unwrap();
     let start = NaiveDate::from_ymd_opt(2024, 1, 10).unwrap();
     let end = NaiveDate::from_ymd_opt(2024, 1, 15).unwrap();
 
     let instances = generator.generate_ad_instances(&rule, start, end).unwrap();
 
-    assert_eq!(instances.first().unwrap(), &NaiveDate::from_ymd_opt(2024, 1, 10).unwrap());
-    assert_eq!(instances.last().unwrap(), &NaiveDate::from_ymd_opt(2024, 1, 15).unwrap());
+    assert_eq!(
+        instances.first().unwrap(),
+        &NaiveDate::from_ymd_opt(2024, 1, 10).unwrap()
+    );
+    assert_eq!(
+        instances.last().unwrap(),
+        &NaiveDate::from_ymd_opt(2024, 1, 15).unwrap()
+    );
+}
+
+#[test]
+fn test_ad_rule_without_dtstart_anchors_at_range_start() {
+    // The Swift/Kotlin/Python binding builds rules like this (no DTSTART);
+    // the rrule crate rejected them with "Missing start date".
+    let generator = create_generator();
+    let rule = AdRecurrenceRule::new("FREQ=MONTHLY;BYMONTHDAY=1".to_string()).unwrap();
+    let start = NaiveDate::from_ymd_opt(2024, 3, 15).unwrap();
+    let end = NaiveDate::from_ymd_opt(2024, 6, 30).unwrap();
+
+    let instances = generator.generate_ad_instances(&rule, start, end).unwrap();
+
+    let expected: Vec<NaiveDate> = [4, 5, 6]
+        .iter()
+        .map(|m| NaiveDate::from_ymd_opt(2024, *m, 1).unwrap())
+        .collect();
+    assert_eq!(instances, expected);
+}
+
+#[test]
+fn test_ad_tzid_dtstart_keeps_its_local_date() {
+    // Midnight in Kathmandu is the previous evening in UTC; the occurrence is
+    // still on 1 January (the rrule crate dropped it at the window edge).
+    let generator = create_generator();
+    let rule = AdRecurrenceRule::new(
+        "DTSTART;TZID=Asia/Kathmandu:20240101T000000\nRRULE:FREQ=DAILY;COUNT=2".to_string(),
+    )
+    .unwrap();
+    let start = NaiveDate::from_ymd_opt(2024, 1, 1).unwrap();
+    let end = NaiveDate::from_ymd_opt(2024, 1, 31).unwrap();
+
+    let instances = generator.generate_ad_instances(&rule, start, end).unwrap();
+
+    assert_eq!(
+        instances,
+        vec![
+            NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+            NaiveDate::from_ymd_opt(2024, 1, 2).unwrap()
+        ]
+    );
 }

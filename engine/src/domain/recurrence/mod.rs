@@ -1,9 +1,11 @@
+pub mod ad_expander;
 pub mod ad_rules;
 pub mod bs_rules;
 pub mod recurrence_enum;
 pub mod rrule_parser;
 pub mod tithi_rules;
 
+pub use ad_expander::AdRecurrenceSet;
 pub use ad_rules::AdRecurrenceRule;
 pub use bs_rules::{BsFrequency, BsRecurrenceRule};
 pub use recurrence_enum::Recurrence;

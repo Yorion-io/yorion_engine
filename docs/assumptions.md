@@ -142,9 +142,15 @@ Source: `domain/tithi.rs:341–357`, `domain/recurrence/tithi_rules.rs:68–79`.
 
 Source: `services/tithi_generator.rs:65–139`.
 
-### 4.6 AD recurrence rules are pass-through to the `rrule` crate
+### 4.6 AD recurrence rules are expanded to dates by a built-in RFC 5545 expander
 
-`AdRecurrenceRule` stores the raw RRULE string and delegates entirely to the `rrule` v0.14 crate for expansion. All RFC 5545 semantics (EXDATE, RDATE, BYYEARDAY, BYWEEKNO, etc.) are the `rrule` crate's responsibility. The BS engine does no AD-specific validation beyond checking that the string is parseable.
+`AdRecurrenceRule` stores the raw iCalendar text (`DTSTART`, `RRULE`, `RDATE`, `EXDATE`, or a bare `FREQ=…` rule) and expands it with `domain/recurrence/ad_expander.rs`. It supports `FREQ=DAILY|WEEKLY|MONTHLY|YEARLY`, `INTERVAL`, `COUNT`, `UNTIL`, `BYMONTH`, `BYMONTHDAY`, `BYYEARDAY`, `BYDAY` (with ordinals for MONTHLY/YEARLY), `BYSETPOS` and `WKST`. It rejects, with an error, sub-daily frequencies, multi-valued `BYHOUR`/`BYMINUTE`/`BYSECOND`, `BYWEEKNO`, `EXRULE` and `RDATE` periods.
+
+- Dates are taken in their own zone: `DTSTART;TZID=Asia/Kathmandu:20240101T000000` occurs on 1 January. No time-zone database is involved.
+- A rule without `DTSTART` is anchored at the start of the query window.
+- A `BYDAY` list mixing numbered and plain days (`-1FR,TH`) matches either, per RFC 5545. rrule.js, python-dateutil and the `rrule` crate require both.
+
+The expander replaced the `rrule` crate (see CHANGELOG). `tests/ad_rrule_differential.rs` checks it against `rrule` on random rules.
 
 ### 4.7 Instance generation is capped at 10,000 occurrences — as an error
 

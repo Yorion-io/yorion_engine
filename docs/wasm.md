@@ -226,21 +226,10 @@ Current distribution sizes (post `wasm-opt`):
 
 | Target | `.wasm` | JS glue |
 |---|---|---|
-| web | ~3.3 MB | ~50 KB |
-| bundler | ~3.3 MB | ~46 KB |
-| nodejs | ~3.3 MB | ~48 KB |
+| web | ~330 KB | ~50 KB |
+| bundler | ~330 KB | ~46 KB |
+| nodejs | ~330 KB | ~48 KB |
 
-Compresses to ~1 MB over HTTP/2 with gzip. Size comes from:
+Compresses to about 140 KB with gzip. Most of the binary is the engine's own code and data (the BS calendar table, tithi overrides, holidays, the Earth's VSOP87 longitude series and the Moon's ELP-2000 terms) plus the Rust standard library. There are no large third-party dependencies left: the Sun/Moon ephemeris and the RFC 5545 expander are built in (`services/ephemeris.rs`, `domain/recurrence/ad_expander.rs`).
 
-| Source | Contribution |
-|---|---|
-| 126 years of calendar data | ~800 KB |
-| Astronomical code (`suncalc`, `astro`) | ~1.2 MB |
-| Recurrence engine (`rrule` + BS extensions) | ~600 KB |
-| Rust std (panic, fmt, allocator) | ~700 KB |
-
-**To reduce size:**
-
-1. `wasm-opt -Oz` — build script calls this automatically if `binaryen` is installed (~10–15% saving).
-2. Feature-flag astronomical calculations — not yet implemented; estimated ~800 KB saving. PRs welcome.
-3. Narrow the calendar data range from BS 1975–2100 — not yet implemented; would require a build-time env var.
+`build-wasm.sh` runs `wasm-opt -Oz` when `binaryen` is installed, for a further few per cent.

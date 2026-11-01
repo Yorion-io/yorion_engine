@@ -17,11 +17,15 @@ All notable changes to `yorion_engine` are documented here.
 
 ### Changed
 - Sun and Moon longitudes now come from a small built-in port of the two `astro` routines the engine uses, with the Earth's VSOP87 longitude series as a static table. Results are bit-for-bit identical (tested against `astro` over 1900–2150), and the WASM binary shrinks from 3.4 MB to 1.9 MB (1.30 MB → 0.48 MB gzipped). `astro` is now only a dev-dependency.
+- AD (`X-CALENDAR=AD`) recurrences are expanded by a built-in RFC 5545 expander instead of the `rrule` crate, which also drops `regex` and the `chrono-tz` time-zone database. A differential test checks it against `rrule` on random rules. Together with the ephemeris change, the WASM binary goes from 3.4 MB to 330 KB (140 KB gzipped) and the Android/Python libraries from about 3–5 MB to about 0.5–0.6 MB.
 - Ayanamsa is now the **computed Lahiri (Chitrapaksha)** value (linear drift from the J2000.0 epoch) instead of a fixed 24.0°, fixing zodiac/nakshatra misassignment near boundaries.
 - BS year lookup is now O(1) (index into a contiguous table) instead of a linear scan.
 - Unbounded recurrence expansion now returns `BsCalendarError::InstanceLimitExceeded` at the 10,000-occurrence safety cap instead of silently truncating.
 
 ### Fixed
+- AD rules without `DTSTART` (including every rule built by the Swift/Kotlin/Python `generate_ad_instances`) failed with "Missing start date"; they are now anchored at the start of the requested range.
+- AD rules with `DTSTART;TZID=…` east of UTC lost their first occurrence at the edge of a query window; dates are now taken in the rule's own zone.
+- `BYHOUR`/`BYMINUTE`/`BYSECOND` with several values produced the same date more than once; such rules are now rejected with a clear error (a single value is accepted).
 - Corrected BS month lengths for years 2000, 2062, 2085, 2086, 2087, 2089, 2090 against the authoritative reference (some broke date round-trips at year boundaries).
 - `BsDate` now derives `Hash`.
 

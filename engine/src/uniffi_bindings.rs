@@ -864,10 +864,7 @@ impl CalendarEngine {
             rrule_parts.push(format!("BYMONTHDAY={}", s.join(",")));
         }
 
-        // Note: DTSTART is handled by the engine/rrule crate logic typically, or we prepend it?
-        // CoreAdRecurrenceRule takes a raw string.
-        // Usually RRULE string doesn't include DTSTART if passed separately, but rrule crate might need it.
-        // However, Core's generate_ad_instances takes Start/End dates separately.
+        // No DTSTART: the expander anchors a bare rule at the start of the range.
 
         let rrule_string = rrule_parts.join(";");
         let core_rule = CoreAdRecurrenceRule::new(rrule_string)

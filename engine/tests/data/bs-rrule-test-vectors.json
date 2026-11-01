@@ -144,7 +144,7 @@
     },
     {
       "id": 21,
-      "intent": "Valid AD rule — passes through to the rrule crate (no X-CALENDAR, no X-TITHI)",
+      "intent": "Valid AD rule — plain RFC 5545, expanded by the AD expander (no X-CALENDAR, no X-TITHI)",
       "input": "FREQ=YEARLY;BYMONTH=1;BYMONTHDAY=1",
       "expected": {
         "outcome": "parse",

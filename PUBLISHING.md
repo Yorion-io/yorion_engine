@@ -150,7 +150,7 @@ Releases are published automatically once they pass Central's validation. After 
 
 - **Python wheels use their own Cargo profile.** `[profile.python-release]` keeps symbols until UniFFI has generated the Python module. The normal release profile strips them, which silently produces an empty module. Don't pass `--release` to maturin, because that switches back to the stripped profile.
 - **The Kotlin package name is `uniffi.yorion_engine`.** That is UniFFI's default, and the existing Flutter plugin's Android code imports it. Changing it to something like `io.yorion.engine` (`package_name` under `[bindings.kotlin]` in `engine/uniffi.toml`) is a breaking change, so do it before 1.0 if at all.
-- **The npm package is about 1.5 MB** (5.9 MB unpacked) because it contains one WASM file per target (web, bundler, Node). An app loads only one, about 480 KB gzipped. Most of what remains is the IANA time-zone database pulled in by the `rrule` crate (used for `X-CALENDAR=AD` rules); it can only be trimmed by replacing `rrule`.
+- **The npm package is about 460 KB** (1.3 MB unpacked) because it contains one WASM file per target (web, bundler, Node). An app loads only one, about 140 KB gzipped.
 - **The tithi accuracy notice** ("verified through BS 2083") is in every package README. Update all of them when `TITHI_VERIFIED_THROUGH_BS` changes.
 
 ## Flutter / pub.dev (not automated yet)

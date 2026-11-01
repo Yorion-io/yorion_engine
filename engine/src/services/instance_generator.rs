@@ -3,8 +3,6 @@ use crate::domain::recurrence::{AdRecurrenceRule, BsFrequency, BsRecurrenceRule}
 use crate::error::{BsCalendarError, Result};
 use crate::services::ConversionService;
 use chrono::{Datelike, NaiveDate};
-use rrule::RRuleSet;
-use std::str::FromStr;
 use std::sync::Arc;
 
 /// Instance generator for expanding recurrence rules into occurrences
@@ -266,7 +264,8 @@ impl InstanceGenerator {
                     // actual last day instead of never matching.
                     let mut retained = Vec::new();
                     for d in set {
-                        let month_days = self.conversion.calendar().get_month_days(d.year, d.month)?;
+                        let month_days =
+                            self.conversion.calendar().get_month_days(d.year, d.month)?;
                         if days.iter().any(|&t| t.min(month_days) == d.day) {
                             retained.push(d);
                         }
@@ -405,40 +404,7 @@ impl InstanceGenerator {
         start: NaiveDate,
         end: NaiveDate,
     ) -> Result<Vec<NaiveDate>> {
-        // Use rrule crate for AD instances
-        // We use UTC for all conversions to ensure date stability
-        let rrule_set = RRuleSet::from_str(&rule.rrule).map_err(|e| {
-            BsCalendarError::InvalidRecurrenceRule(format!("Failed to parse RRULE: {}", e))
-        })?;
-
-        // Convert range to DateTime<Utc>
-        // Start of day for start date
-        let start_dt = start
-            .and_hms_opt(0, 0, 0)
-            .ok_or_else(|| {
-                BsCalendarError::InvalidRecurrenceRule("Invalid start date".to_string())
-            })?
-            .and_utc();
-
-        // End of day for end date
-        let end_dt = end
-            .and_hms_opt(23, 59, 59)
-            .ok_or_else(|| BsCalendarError::InvalidRecurrenceRule("Invalid end date".to_string()))?
-            .and_utc();
-
-        // Generate instances
-        // We iterate through occurrences properly
-        // Note: rrule iterator yields DateTime<Tz>
-        // We convert back to NaiveDate
-
-        let instances: Vec<NaiveDate> = rrule_set
-            .into_iter()
-            .skip_while(|dt| dt < &start_dt)
-            .take_while(|dt| dt <= &end_dt)
-            .map(|dt| dt.date_naive())
-            .collect();
-
-        Ok(instances)
+        rule.recurrence_set()?.dates_between(start, end)
     }
 
     /// Advance a date according to the recurrence rule
@@ -484,8 +450,7 @@ impl InstanceGenerator {
         let year = u16::try_from(year).map_err(|_| BsCalendarError::InvalidYear(0))?;
 
         // Clamp day to valid range for new month
-        self.conversion
-            .clamp_bs_date(year, new_month, date.day)
+        self.conversion.clamp_bs_date(year, new_month, date.day)
     }
 
     /// Advance a BS date by a number of years
