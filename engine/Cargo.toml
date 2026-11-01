@@ -23,7 +23,6 @@ chrono = { version = "0.4", default-features = false, features = ["serde", "wasm
 serde = { version = "1.0", default-features = false, features = ["derive", "alloc"] }
 thiserror = "2.0"
 suncalc = "0.3.0"
-astro = "2.0.0"
 serde_json = "1.0"
 
 # WASM dependencies
@@ -45,6 +44,8 @@ uniffi-bindings = ["uniffi"]
 uniffi-cli = ["uniffi-bindings", "uniffi/cli"]
 
 [dev-dependencies]
+# Reference implementation that src/services/ephemeris.rs is tested against, bit for bit.
+astro = "2.0.0"
 proptest = "1.0"
 criterion = { version = "0.5", features = ["html_reports"] }
 

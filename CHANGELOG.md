@@ -5,6 +5,7 @@ All notable changes to `yorion_engine` are documented here.
 ## [Unreleased]
 
 ### Added
+- Packaging for crates.io, npm (`@yorion/engine`), PyPI (`yorion-engine`), Swift Package Manager and Maven Central (`io.yorion:yorion-engine`), plus a `publish.yml` workflow. See PUBLISHING.md.
 - Extended BS ↔ AD conversion data to **BS 1975–2100** (was 2000–2090), 126 years, sourced from the `opensource-nepal/nepali_datetime` reference table.
 - **Yoga** and **Karana** — the engine now computes all five panchanga angas (tithi, vara, nakshatra, yoga, karana). New `Yoga`/`Karana` enums, getters, and name helpers across the Rust, WASM, and UniFFI surfaces.
 - `CalendarEngine::checked_bs_date` — validates a BS date against the actual month-length table (rejects e.g. day 32 in a 30-day month), unlike the structural-only `BsDate::new`.
@@ -15,6 +16,7 @@ All notable changes to `yorion_engine` are documented here.
 - Build-time and test-time invariants that each year's month lengths sum to its anchor gap.
 
 ### Changed
+- Sun and Moon longitudes now come from a small built-in port of the two `astro` routines the engine uses, with the Earth's VSOP87 longitude series as a static table. Results are bit-for-bit identical (tested against `astro` over 1900–2150), and the WASM binary shrinks from 3.4 MB to 1.9 MB (1.30 MB → 0.48 MB gzipped). `astro` is now only a dev-dependency.
 - Ayanamsa is now the **computed Lahiri (Chitrapaksha)** value (linear drift from the J2000.0 epoch) instead of a fixed 24.0°, fixing zodiac/nakshatra misassignment near boundaries.
 - BS year lookup is now O(1) (index into a contiguous table) instead of a linear scan.
 - Unbounded recurrence expansion now returns `BsCalendarError::InstanceLimitExceeded` at the 10,000-occurrence safety cap instead of silently truncating.

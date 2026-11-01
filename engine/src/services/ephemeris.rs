@@ -1,0 +1,292 @@
+//! Minimal ephemeris: the Sun's and Moon's geocentric ecliptic longitudes and
+//! the Julian Day.
+//!
+//! These are the only results the engine ever needed from the `astro` crate.
+//! The code is ported from `astro` 2.0.0 (MIT licence, Saurav Sachidanand), with
+//! the same formulas, the same coefficients and the same order of floating-point
+//! operations, so the results are bit-for-bit identical. A test against `astro`
+//! (a dev-dependency only) enforces that.
+//!
+//! The port exists for size: `astro` compiles VSOP87 tables for eight planets as
+//! code that builds nested `Vec`s on every call, which made up most of the
+//! WASM and mobile binaries. Here the single series we use is a static table.
+//!
+//! References: Jean Meeus, *Astronomical Algorithms* (2nd ed.), chapters 7
+//! (Julian Day), 32 (VSOP87) and 47 (Moon, partial ELP-2000/82).
+
+use std::f64::consts::PI;
+
+use super::vsop87_earth::EARTH_L;
+
+const TWO_PI: f64 = 2.0 * PI;
+const J2000: f64 = 2451545.0;
+
+/// Julian Day for a Gregorian calendar date with a fractional day.
+pub fn julian_day(year: i16, month: u8, decimal_day: f64) -> f64 {
+    let (y, m) = if month == 1 || month == 2 {
+        ((year - 1) as f64, (month + 12) as f64)
+    } else {
+        (year as f64, month as f64)
+    };
+
+    let a = (y / 100.0).floor();
+    let b = 2.0 - a + (a / 4.0).floor();
+
+    (365.25 * (y + 4716.0)).floor() + (30.6001 * (m + 1.0)).floor() + decimal_day + b - 1524.5
+}
+
+/// Geocentric ecliptic longitude of the Sun, in radians within `[0, 2π)`,
+/// from the VSOP87 (series D) heliocentric longitude of the Earth.
+pub fn sun_longitude(jd: f64) -> f64 {
+    let jm = (jd - J2000) / 365250.0; // Julian millennia
+
+    let mut l = 0.0;
+    let mut t = 1.0;
+    for series in EARTH_L.iter() {
+        let mut y = 0.0;
+        for term in series.iter() {
+            y += term[0] * (term[1] + term[2] * jm).cos();
+        }
+        l += y * t;
+        t *= jm;
+    }
+
+    limit_to_two_pi(limit_to_two_pi(l) + PI)
+}
+
+/// Geocentric ecliptic longitude of the Moon, in radians (not normalised),
+/// from the partial ELP-2000/82 theory in Meeus chapter 47. About 10″ accurate.
+pub fn moon_longitude(jd: f64) -> f64 {
+    let jc = (jd - J2000) / 36525.0; // Julian centuries
+
+    let d = limit_to_360(powers(
+        jc,
+        297.8501921,
+        &[
+            445267.1114034,
+            -0.0018819,
+            1.0 / 545868.0,
+            -1.0 / 113065000.0,
+        ],
+    ))
+    .to_radians();
+    let m = limit_to_360(powers(
+        jc,
+        357.5291092,
+        &[35999.0502909, -0.0001536, 1.0 / 24490000.0],
+    ))
+    .to_radians();
+    let m1 = limit_to_360(powers(
+        jc,
+        134.9633964,
+        &[477198.8675055, 0.0087414, 1.0 / 69699.0, -1.0 / 14712000.0],
+    ))
+    .to_radians();
+    let f = limit_to_360(powers(
+        jc,
+        93.272095,
+        &[
+            483202.0175233,
+            -0.0036539,
+            -1.0 / 3526000.0,
+            1.0 / 863310000.0,
+        ],
+    ))
+    .to_radians();
+    let e = 1.0 - jc * (0.002_516 + jc * 0.000_0074);
+    let l1 = limit_to_360(powers(
+        jc,
+        218.3164477,
+        &[
+            481267.88123421,
+            -0.0015786,
+            1.0 / 538841.0,
+            -1.0 / 65194000.0,
+        ],
+    ))
+    .to_radians();
+
+    let a1 = limit_to_360(119.75 + 131.849 * jc).to_radians();
+    let a2 = limit_to_360(53.090 + 479264.29 * jc).to_radians();
+
+    let mut l = 0.0;
+    for &(cd, cm, cm1, cf, coeff) in LONGITUDE_TERMS.iter() {
+        let arg = (cd as f64) * d + (cm as f64) * m + (cm1 as f64) * m1 + (cf as f64) * f;
+        let t = match cm.abs() {
+            1 => e,
+            2 => e * e,
+            _ => 1.0,
+        };
+        l += (coeff as f64) * t * arg.sin();
+    }
+
+    l += 3958.0 * a1.sin() + 1962.0 * (l1 - f).sin() + 318.0 * a2.sin();
+
+    l1 + l.to_radians() / 1000000.0
+}
+
+/// `c + a[0]·x + a[1]·x² + …`, evaluated exactly as `astro`'s `Horner_eval!`
+/// does (running power, not true Horner) so results match bit for bit.
+#[inline(always)]
+fn powers(x: f64, c: f64, a: &[f64]) -> f64 {
+    let mut y = c;
+    let mut u = 1.0;
+    for coeff in a {
+        u *= x;
+        y += u * coeff;
+    }
+    y
+}
+
+#[inline]
+fn limit_to_360(angle: f64) -> f64 {
+    let n = (angle / 360.0) as i64;
+    let limited = angle - (360.0 * (n as f64));
+    if limited < 0.0 {
+        limited + 360.0
+    } else {
+        limited
+    }
+}
+
+#[inline]
+fn limit_to_two_pi(angle: f64) -> f64 {
+    let n = (angle / TWO_PI) as i64;
+    let limited = angle - (TWO_PI * (n as f64));
+    if limited < 0.0 {
+        limited + TWO_PI
+    } else {
+        limited
+    }
+}
+
+/// Periodic terms for the Moon's longitude (Meeus table 47.A):
+/// multiples of D, M, M′, F and the coefficient of the sine, in 10⁻⁶ degrees.
+/// The distance column of the table is not needed and is omitted.
+#[rustfmt::skip]
+static LONGITUDE_TERMS: [(i8, i8, i8, i8, i32); 60] = [
+    (0,  0,  1,  0,  6288774),
+    (2,  0, -1,  0,  1274027),
+    (2,  0,  0,  0,  658314),
+    (0,  0,  2,  0,  213618),
+    (0,  1,  0,  0, -185116),
+    (0,  0,  0,  2, -114332),
+    (2,  0, -2,  0,  58793),
+    (2, -1, -1,  0,  57066),
+    (2,  0,  1,  0,  53322),
+    (2, -1,  0,  0,  45758),
+    (0,  1, -1,  0, -40923),
+    (1,  0,  0,  0, -34720),
+    (0,  1,  1,  0, -30383),
+    (2,  0,  0, -2,  15327),
+    (0,  0,  1,  2, -12528),
+    (0,  0,  1, -2,  10980),
+    (4,  0, -1,  0,  10675),
+    (0,  0,  3,  0,  10034),
+    (4,  0, -2,  0,  8548),
+    (2,  1, -1,  0, -7888),
+    (2,  1,  0,  0, -6766),
+    (1,  0, -1,  0, -5163),
+    (1,  1,  0,  0,  4987),
+    (2, -1,  1,  0,  4036),
+    (2,  0,  2,  0,  3994),
+    (4,  0,  0,  0,  3861),
+    (2,  0, -3,  0,  3665),
+    (0,  1, -2,  0, -2689),
+    (2,  0, -1,  2, -2602),
+    (2, -1, -2,  0,  2390),
+    (1,  0,  1,  0, -2348),
+    (2, -2,  0,  0,  2236),
+    (0,  1,  2,  0, -2120),
+    (0,  2,  0,  0, -2069),
+    (2, -2, -1,  0,  2048),
+    (2,  0,  1, -2, -1773),
+    (2,  0,  0,  2, -1595),
+    (4, -1, -1,  0,  1215),
+    (0,  0,  2,  2, -1110),
+    (3,  0, -1,  0, -892),
+    (2,  1,  1,  0, -810),
+    (4, -1, -2,  0,  759),
+    (0,  2, -1,  0, -713),
+    (2,  2, -1,  0, -700),
+    (2,  1, -2,  0,  691),
+    (2, -1,  0, -2,  596),
+    (4,  0,  1,  0,  549),
+    (0,  0,  4,  0,  537),
+    (4, -1,  0,  0,  520),
+    (1,  0, -2,  0, -487),
+    (2,  1,  0, -2, -399),
+    (0,  0,  2, -2, -381),
+    (1,  1,  1,  0,  351),
+    (3,  0, -2,  0, -340),
+    (4,  0, -3,  0,  330),
+    (2, -1,  2,  0,  327),
+    (0,  2,  1,  0, -323),
+    (1,  1, -1,  0,  299),
+    (2,  0,  3,  0,  294),
+    (2,  0, -1, -2,  0),
+];
+
+#[cfg(test)]
+mod tests {
+    //! The port must reproduce `astro` exactly: tithi boundaries, almanac
+    //! overrides and every ground-truth test were calibrated against its output.
+    use super::*;
+    use astro::time::{CalType, Date};
+
+    /// Every 0.37 days from AD 1900 to 2150 (≈ 247k samples), covering the
+    /// supported BS range with margin and landing on many times of day.
+    fn sample_jds() -> impl Iterator<Item = f64> {
+        let start = 2415020.5; // 1900-01-01
+        let end = 2506331.5; // 2150-01-01
+        (0..)
+            .map(move |i| start + i as f64 * 0.37)
+            .take_while(move |jd| *jd < end)
+    }
+
+    #[test]
+    fn sun_longitude_matches_astro_bit_for_bit() {
+        for jd in sample_jds() {
+            let (expected, _) = astro::sun::geocent_ecl_pos(jd);
+            assert_eq!(
+                sun_longitude(jd).to_bits(),
+                expected.long.to_bits(),
+                "jd {jd}"
+            );
+        }
+    }
+
+    #[test]
+    fn moon_longitude_matches_astro_bit_for_bit() {
+        for jd in sample_jds() {
+            let (expected, _) = astro::lunar::geocent_ecl_pos(jd);
+            assert_eq!(
+                moon_longitude(jd).to_bits(),
+                expected.long.to_bits(),
+                "jd {jd}"
+            );
+        }
+    }
+
+    #[test]
+    fn julian_day_matches_astro_bit_for_bit() {
+        for year in 1900..=2150i16 {
+            for month in 1..=12u8 {
+                for &decimal_day in &[1.0, 1.5, 13.237_5, 28.999, 31.25] {
+                    let date = Date {
+                        year,
+                        month,
+                        decimal_day,
+                        cal_type: CalType::Gregorian,
+                    };
+                    let expected = astro::time::julian_day(&date);
+                    assert_eq!(
+                        julian_day(year, month, decimal_day).to_bits(),
+                        expected.to_bits(),
+                        "{year}-{month} day {decimal_day}"
+                    );
+                }
+            }
+        }
+    }
+}

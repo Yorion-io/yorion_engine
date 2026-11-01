@@ -1,8 +1,7 @@
 use crate::domain::tithi::{Location, Paksha, Tithi};
 use crate::domain::zodiac::{DailyAstroInfo, Karana, Nakshatra, Yoga, ZodiacSign};
 use crate::error::{BsCalendarError, Result};
-use astro::time::{julian_day, CalType, Date};
-use astro::{lunar, sun};
+use super::ephemeris;
 use chrono::{DateTime, Datelike, NaiveDate, NaiveTime, Timelike, Utc};
 use suncalc::{get_times, Timestamp};
 
@@ -424,12 +423,10 @@ impl AstronomicalService {
     /// Internal helper for longitude calculation from JD
     pub fn calculate_longitudes_from_jd(&self, jd: f64) -> (f64, f64) {
         // High-precision Sun position (VSOP87)
-        let (sun_pos, _) = sun::geocent_ecl_pos(jd);
-        let sun_long = sun_pos.long.to_degrees() % 360.0;
+        let sun_long = ephemeris::sun_longitude(jd).to_degrees() % 360.0;
 
         // High-precision Moon position (ELP-2000/82)
-        let (moon_pos, _) = lunar::geocent_ecl_pos(jd);
-        let moon_long = moon_pos.long.to_degrees() % 360.0;
+        let moon_long = ephemeris::moon_longitude(jd).to_degrees() % 360.0;
 
         (sun_long, moon_long)
     }
@@ -440,13 +437,6 @@ impl AstronomicalService {
             + (dt.minute() as f64 / 1440.0)
             + (dt.second() as f64 / 86400.0);
 
-        let date = Date {
-            year: dt.year() as i16,
-            month: dt.month() as u8,
-            decimal_day,
-            cal_type: CalType::Gregorian,
-        };
-
-        julian_day(&date)
+        ephemeris::julian_day(dt.year() as i16, dt.month() as u8, decimal_day)
     }
 }
